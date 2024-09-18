@@ -16,7 +16,7 @@ class ClientHomePage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Color(0xFFAEF989),
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.menu, color: Colors.black),
@@ -106,8 +106,8 @@ class ClientHomePage extends StatelessWidget {
                       ),
                     ),
                     Positioned(
-                      bottom: 12,
-                      right: 12,
+                      bottom: 5,
+                      right: 5,
                       child: ElevatedButton(
                         onPressed: () {
                           // Request now action
