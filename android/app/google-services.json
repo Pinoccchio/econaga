@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "451051198012",
+    "project_id": "econaga-proj",
+    "storage_bucket": "econaga-proj.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:451051198012:android:48d3991644723ea75bd539",
+        "android_client_info": {
+          "package_name": "com.example.econaga_prj"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBK301cXJ3GjpebxgQemP7mmQcNfTLzm5w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
