@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../client_garbageCollection_screen/client_garbage_collection_screen.dart';
+import '../client_tranportation_screen/client_transportation_screen.dart';
+
 class RequestPage extends StatelessWidget {
+  final String userId;
+
+  RequestPage({required this.userId});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,7 +78,12 @@ class RequestPage extends StatelessWidget {
                 // Transportation Services button
                 ElevatedButton(
                   onPressed: () {
-                    // Handle Transportation Services action
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ClientTransportationScreen(userId: userId), // Pass userId here
+                      ),
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
@@ -97,7 +109,12 @@ class RequestPage extends StatelessWidget {
                 // Garbage Collection button
                 ElevatedButton(
                   onPressed: () {
-                    // Handle Garbage Collection action
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ClientGarbageCollectionScreen(userId: userId), // Pass userId here
+                      ),
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,

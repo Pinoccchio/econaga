@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../designs/app_colors.dart';
+import 'SubmittedComplainsPage.dart';
+
 class ComplaintsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF86CF64), // Set body background color
+      backgroundColor: AppColors.origColor, // Set body background color
       appBar: AppBar(
-        backgroundColor: Color(0xFF9CE47C), // Light green color
+        backgroundColor: Colors.transparent, // Light green color
         elevation: 0,
         title: Text(
           'COMPLAINTS FORM',
@@ -23,11 +26,14 @@ class ComplaintsPage extends StatelessWidget {
             icon: Icon(Icons.more_vert, color: Colors.black),
             onSelected: (String value) {
               if (value == 'refresh') {
-                // Handle refresh action
                 print('Refresh clicked');
               } else if (value == 'submitted') {
-                // Show submitted complaints
-                _showSubmittedComplaints(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SubmittedComplaintsPage(),
+                  ),
+                );
               }
             },
             itemBuilder: (BuildContext context) {
@@ -36,14 +42,14 @@ class ComplaintsPage extends StatelessWidget {
                   value: 'refresh',
                   child: Text(
                     'Refresh',
-                    style: TextStyle(color: Colors.white), // White text color
+                    style: TextStyle(color: Colors.white),
                   ),
                 ),
                 PopupMenuItem<String>(
                   value: 'submitted',
                   child: Text(
                     'Submitted Complaints',
-                    style: TextStyle(color: Colors.white), // White text color
+                    style: TextStyle(color: Colors.white),
                   ),
                 ),
               ];
@@ -134,34 +140,5 @@ class ComplaintsPage extends StatelessWidget {
       ),
     );
   }
-
-  void _showSubmittedComplaints(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: Colors.black,
-          title: Text(
-            'Submitted Complaints',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: Text(
-            'Here you can show the list of submitted complaints.',
-            style: TextStyle(color: Colors.white),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // Close the dialog
-              },
-              child: Text(
-                'Close',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
 }
+

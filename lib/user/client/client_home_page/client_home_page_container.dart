@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
-
 import 'AccountPage.dart';
-import 'ComplaintsPage.dart';
 import 'NotificationPage.dart';
 import 'RequestPage.dart';
 import 'client_home_page.dart';
+import 'complaints_page/ComplaintsPage.dart';
 
 class ClientHomeScreenContainer extends StatefulWidget {
+  final String userId; // Add a userId parameter
+
+  ClientHomeScreenContainer({required this.userId}); // Constructor
+
   @override
   _ClientHomeScreenContainerState createState() => _ClientHomeScreenContainerState();
 }
@@ -15,17 +18,30 @@ class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
   int _selectedIndex = 2; // Default to the Home tab (index 2)
 
   // List of pages for each BottomNavigationBar item
-  final List<Widget> _pages = [
-    RequestPage(),
-    NotificationPage(),
-    ClientHomePage(), // Home Page
-    ComplaintsPage(),
-    AccountPage(),
-  ];
+  final List<Widget> _pages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _pages.addAll([
+      RequestPage(userId: widget.userId), // Pass userId to RequestPage
+      NotificationPage(),
+      ClientHomePage(onRequestNow: _navigateToRequestPage, userId: widget.userId),
+      ComplaintsPage(),
+      AccountPage(userId: widget.userId), // Pass userId to AccountPage
+    ]);
+  }
+
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
+    });
+  }
+
+  void _navigateToRequestPage() {
+    setState(() {
+      _selectedIndex = 0; // Navigate to Request tab
     });
   }
 

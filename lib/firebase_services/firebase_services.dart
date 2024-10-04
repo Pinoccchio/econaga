@@ -22,6 +22,10 @@ class FirebaseServices {
 
   // Function to save user data to Firestore
   Future<void> saveUserData(String userId, Map<String, dynamic> userData) async {
-    await FirebaseFirestore.instance.collection('users').doc(userId).set(userData);
+    await FirebaseFirestore.instance
+        .collection('USERS_ACCOUNTS') // Common collection for both clients and collectors
+        .doc(userId)
+        .set(userData);
   }
+
 }
