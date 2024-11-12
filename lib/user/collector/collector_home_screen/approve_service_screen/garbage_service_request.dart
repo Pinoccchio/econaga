@@ -1,40 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'map_screen.dart'; // Import the new MapScreen
 
 class GarbageServiceRequest extends StatelessWidget {
-  final List<Map<String, String>> requests = [
-    {
-      'name': 'Maria Isidro',
-      'details': 'Naga, Camarines Sur, 1 Bag of Recyclable Trash',
-      'initials': 'MI',
-      'color': '0xFF7ED957',
-    },
-    {
-      'name': 'Mary Ann Gavarra',
-      'details': 'Naga, Camarines Norte',
-      'initials': 'MA',
-      'color': '0xFFFF69B4',
-    },
-    {
-      'name': 'Joyce Macaubay',
-      'details': 'Nabua, Camarines Sur',
-      'initials': 'JM',
-      'color': '0xFF1E90FF',
-    },
-    {
-      'name': 'Alejandro Sicad',
-      'details': 'Camaligan',
-      'initials': 'AS',
-      'color': '0xFFFFA500',
-    },
-    {
-      'name': 'Alma Cresidio',
-      'details': 'Iriga',
-      'initials': 'AC',
-      'color': '0xFF32CD32',
-    },
-  ];
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -68,41 +37,190 @@ class GarbageServiceRequest extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ListView.separated(
-              itemCount: requests.length,
-              separatorBuilder: (context, index) => Divider(height: 1),
-              itemBuilder: (context, index) {
-                final request = requests[index];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Color(int.parse(request['color']!)),
-                    child: Text(
-                      request['initials']!,
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  title: Text(
-                    request['name']!,
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  subtitle: Text(
-                    request['details']!,
-                    style: GoogleFonts.poppins(
-                      color: Colors.grey[600],
-                      fontSize: 12,
-                    ),
-                  ),
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('GARBAGE_REQUESTS')
+                  .where('status', isEqualTo: 'approved')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Center(child: Text('No approved requests found.'));
+                }
+
+                final requests = snapshot.data!.docs;
+
+                return ListView.separated(
+                  itemCount: requests.length,
+                  separatorBuilder: (context, index) => Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final request = requests[index];
+                    final data = request.data() as Map<String, dynamic>;
+                    return _buildRequestTile(data, context);
+                  },
                 );
               },
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildRequestTile(Map<String, dynamic> data, BuildContext context) {
+    final initials = '${data['first_name'][0]}${data['last_name'][0]}';
+    final location = data['location']['address'];
+    final note = data['note'] != null ? 'Note: ${data['note']}' : 'No additional notes';
+    final details = '$location\n$note';
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('USERS_ACCOUNTS')
+          .doc(data['user_id'])
+          .snapshots(),
+      builder: (context, userSnapshot) {
+        if (userSnapshot.connectionState == ConnectionState.waiting) {
+          return _buildListTile(initials, data, details, context, null);
+        }
+
+        if (userSnapshot.hasData && userSnapshot.data!.data() != null) {
+          final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+          final profilePicture = userData['profile_picture'];
+          return _buildListTile(initials, data, details, context, profilePicture);
+        } else {
+          return _buildListTile(initials, data, details, context, null);
+        }
+      },
+    );
+  }
+
+  Widget _buildListTile(String initials, Map<String, dynamic> data, String details, BuildContext context, String? profilePicture) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: profilePicture != null ? NetworkImage(profilePicture) : null,
+        backgroundColor: profilePicture == null ? Colors.grey : Colors.transparent,
+        child: profilePicture == null
+            ? Text(
+          initials,
+          style: GoogleFonts.poppins(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        )
+            : null,
+      ),
+      title: Text(
+        '${data['first_name']} ${data['last_name']}',
+        style: GoogleFonts.poppins(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(
+        details,
+        style: GoogleFonts.poppins(
+          color: Colors.grey[600],
+          fontSize: 12,
+        ),
+      ),
+      trailing: PopupMenuButton<String>(
+        onSelected: (value) {
+          if (value == 'Details') {
+            _showDetailsDialog(context, data, profilePicture);
+          } else if (value == 'Visit') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MapScreen(userData: data),
+              ),
+            );
+          }
+        },
+        itemBuilder: (BuildContext context) {
+          return [
+            PopupMenuItem(
+              value: 'Details',
+              child: Text('Details', style: GoogleFonts.poppins()),
+            ),
+            PopupMenuItem(
+              value: 'Visit',
+              child: Text('Visit', style: GoogleFonts.poppins()),
+            ),
+          ];
+        },
+        icon: Icon(Icons.more_vert),
+      ),
+    );
+  }
+
+  void _showDetailsDialog(BuildContext context, Map<String, dynamic> data, String? profilePicture) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            '${data['first_name']} ${data['last_name']}',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: CircleAvatar(
+                    radius: 50,
+                    backgroundImage: profilePicture != null ? NetworkImage(profilePicture) : null,
+                    backgroundColor: profilePicture == null ? Colors.grey : Colors.transparent,
+                    child: profilePicture == null
+                        ? Text(
+                      '${data['first_name'][0]}${data['last_name'][0]}',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 40,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                        : null,
+                  ),
+                ),
+                SizedBox(height: 20),
+                RichText(
+                  text: TextSpan(
+                    style: GoogleFonts.poppins(fontSize: 14, color: Colors.black),
+                    children: [
+                      TextSpan(text: 'Email: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: '${data['email']}\n'),
+                      TextSpan(text: 'Contact: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: '${data['contact_number']}\n'),
+                      TextSpan(text: 'Location: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: '${data['location']['address']}\n'),
+                      TextSpan(text: 'Note: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: '${data['note'] ?? 'No additional notes'}'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text(
+                'Close',
+                style: GoogleFonts.poppins(
+                  color: Colors.blue,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

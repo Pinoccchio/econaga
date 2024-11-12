@@ -153,8 +153,11 @@ class _AdminWelcomeScreenState extends State<AdminWelcomeScreen> {
             return;
           }
         } else {
-          _showErrorSnackBar("User document does not exist.");
-          print("User document does not exist for user: ${user.uid}");
+          // User document does not exist, sign out and navigate to login page
+          await FirebaseAuth.instance.signOut();
+          _showErrorSnackBar("User document does not exist. Logging out.");
+          print("User document does not exist for user: ${user.uid}. Logging out.");
+          _navigateTo(AdminLoginPage());
         }
       } catch (e) {
         _showErrorSnackBar("Error fetching user data: $e");

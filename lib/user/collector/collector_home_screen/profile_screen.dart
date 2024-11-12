@@ -10,14 +10,48 @@ import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:google_places_flutter/google_places_flutter.dart';
+import 'package:google_places_flutter/model/prediction.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   final String userId;
 
   ProfileScreen({required this.userId});
 
+  @override
+  _ProfileScreenState createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
   final ImagePicker _picker = ImagePicker();
   final FirebaseStorage _storage = FirebaseStorage.instance;
+  GoogleMapController? _mapController;
+  Set<Marker> _markers = {};
+  TextEditingController _searchController = TextEditingController();
+  LatLng? _selectedLocation;
+  LatLng? _currentLocation;
+
+  // TODO: Replace with your actual Google Places API key
+  static const String kGoogleApiKey = "AIzaSyD4UAtE_r8JjBbd0o5qfv3ZSPX_8xkNJ7c";
+
+  @override
+  void initState() {
+    super.initState();
+    _getCurrentLocation();
+  }
+
+  void _getCurrentLocation() async {
+    Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+    setState(() {
+      _currentLocation = LatLng(position.latitude, position.longitude);
+      _updateMarkers();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +82,7 @@ class ProfileScreen extends StatelessWidget {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+                        colors: [Colors.transparent, Colors.green.withOpacity(0.7)],
                       ),
                     ),
                   ),
@@ -66,7 +100,7 @@ class ProfileScreen extends StatelessWidget {
             child: StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('USERS_ACCOUNTS')
-                  .doc(userId)
+                  .doc(widget.userId)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -103,11 +137,11 @@ class ProfileScreen extends StatelessWidget {
           alignment: Alignment.bottomRight,
           children: [
             GestureDetector(
-              onTap: () => _showProfileDialog(context, userData['profile_picture'] ?? ''),
+              onTap: () => _showProfileDialog(context, userData['selfieImageUrl'] ?? ''),
               child: CircleAvatar(
                 radius: 60,
-                backgroundImage: userData['profile_picture'] != null
-                    ? NetworkImage(userData['profile_picture'])
+                backgroundImage: userData['selfieImageUrl'] != null
+                    ? NetworkImage(userData['selfieImageUrl'])
                     : AssetImage('lib/components/assets/images/default_profile_pic.jpg') as ImageProvider,
               ),
             ),
@@ -130,7 +164,7 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
         Text(
-          'Eco Warrior',
+          'Collector',
           style: GoogleFonts.poppins(
             fontSize: 16,
             color: Colors.green,
@@ -147,8 +181,17 @@ class ProfileScreen extends StatelessWidget {
         _buildProfileField(Icons.email, 'Email', userData['email'] ?? 'N/A'),
         _buildProfileField(Icons.phone, 'Mobile Number', userData['phone_number'] ?? 'N/A'),
         _buildProfileField(Icons.cake, 'Date of Birth', userData['date_of_birth'] ?? 'N/A'),
+        _buildProfileField(Icons.local_shipping, 'Truck Number', userData['truck_number'] ?? 'N/A'),
+        _buildProfileField(Icons.location_on, 'Collection Zone', userData['collection_zone'] ?? 'N/A'),
+        _buildProfileField(Icons.access_time, 'Created At', _formatTimestamp(userData['createdAt'])),
+        _buildProfileField(Icons.verified_user, 'Status', userData['status'] ?? 'N/A'),
       ],
     );
+  }
+
+  String _formatTimestamp(Timestamp? timestamp) {
+    if (timestamp == null) return 'N/A';
+    return DateFormat('MMMM d, yyyy \'at\' h:mm:ss a').format(timestamp.toDate());
   }
 
   Widget _buildProfileField(IconData icon, String label, String value) {
@@ -176,6 +219,68 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _showProfileDialog(BuildContext context, String profileImageUrl) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned.fill(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    color: Colors.transparent,
+                  ),
+                ),
+              ),
+              CircleAvatar(
+                radius: 100,
+                backgroundImage: profileImageUrl.isNotEmpty
+                    ? NetworkImage(profileImageUrl)
+                    : AssetImage('lib/components/assets/images/default_profile_pic.jpg') as ImageProvider,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _updateProfilePicture(BuildContext context) async {
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      try {
+        String fileName = 'collectors/${widget.userId}/selfie_image/${DateTime.now().millisecondsSinceEpoch}.jpg';
+        File file = File(image.path);
+        await _storage.ref(fileName).putFile(file);
+
+        String downloadUrl = await _storage.ref(fileName).getDownloadURL();
+
+        await FirebaseFirestore.instance
+            .collection('USERS_ACCOUNTS')
+            .doc(widget.userId)
+            .update({'selfieImageUrl': downloadUrl});
+
+        Fluttertoast.showToast(
+          msg: "Profile picture updated successfully.",
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      } catch (e) {
+        Fluttertoast.showToast(
+          msg: "Failed to update profile picture: $e",
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    }
   }
 
   void _showSettingsModal(BuildContext context) {
@@ -258,72 +363,10 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _showProfileDialog(BuildContext context, String profileImageUrl) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned.fill(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
-                    color: Colors.transparent,
-                  ),
-                ),
-              ),
-              CircleAvatar(
-                radius: 100,
-                backgroundImage: profileImageUrl.isNotEmpty
-                    ? NetworkImage(profileImageUrl)
-                    : AssetImage('lib/components/assets/images/default_profile_pic.jpg') as ImageProvider,
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _updateProfilePicture(BuildContext context) async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      try {
-        String fileName = 'clients/$userId/profile_pic/${DateTime.now().millisecondsSinceEpoch}.jpg';
-        File file = File(image.path);
-        await _storage.ref(fileName).putFile(file);
-
-        String downloadUrl = await _storage.ref(fileName).getDownloadURL();
-
-        await FirebaseFirestore.instance
-            .collection('USERS_ACCOUNTS')
-            .doc(userId)
-            .update({'profile_picture': downloadUrl});
-
-        Fluttertoast.showToast(
-          msg: "Profile picture updated successfully.",
-          backgroundColor: Colors.green,
-          textColor: Colors.white,
-        );
-      } catch (e) {
-        Fluttertoast.showToast(
-          msg: "Failed to update profile picture: $e",
-          backgroundColor: Colors.red,
-          textColor: Colors.white,
-        );
-      }
-    }
-  }
-
   void _showChangePasswordModal(BuildContext context) {
-    final TextEditingController _currentPasswordController = TextEditingController();
-    final TextEditingController _newPasswordController = TextEditingController();
-    final TextEditingController _confirmPasswordController = TextEditingController();
+    TextEditingController currentPasswordController = TextEditingController();
+    TextEditingController newPasswordController = TextEditingController();
+    TextEditingController confirmPasswordController = TextEditingController();
 
     showModalBottomSheet(
       context: context,
@@ -350,12 +393,12 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: 20),
-                _buildPasswordField('Current Password', _currentPasswordController, true),
+                _buildPasswordField('Current Password', currentPasswordController, true),
                 SizedBox(height: 20),
-                _buildPasswordField('New Password', _newPasswordController, true),
+                _buildPasswordField('New Password', newPasswordController, true),
                 SizedBox(height: 20),
-                _buildPasswordField('Confirm Password', _confirmPasswordController, true),
-                SizedBox(height: 20),
+                _buildPasswordField('Confirm New Password', confirmPasswordController, true),
+                SizedBox(height: 30),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
@@ -365,43 +408,45 @@ class ProfileScreen extends StatelessWidget {
                     padding: EdgeInsets.symmetric(vertical: 15, horizontal: 30),
                   ),
                   onPressed: () async {
-                    String currentPassword = _currentPasswordController.text;
-                    String newPassword = _newPasswordController.text;
-                    String confirmPassword = _confirmPasswordController.text;
+                    if (newPasswordController.text != confirmPasswordController.text) {
+                      Fluttertoast.showToast(
+                        msg: "New passwords do not match!",
+                        backgroundColor: Colors.red,
+                        textColor: Colors.white,
+                      );
+                      return;
+                    }
 
-                    if (newPassword == confirmPassword) {
-                      try {
-                        User? user = FirebaseAuth.instance.currentUser;
+                    try {
+                      User? user = FirebaseAuth.instance.currentUser;
+
+                      if (user != null) {
                         AuthCredential credential = EmailAuthProvider.credential(
-                          email: user!.email!,
-                          password: currentPassword,
+                          email: user.email!,
+                          password: currentPasswordController.text,
                         );
 
                         await user.reauthenticateWithCredential(credential);
-                        await user.updatePassword(newPassword);
+                        await user.updatePassword(newPasswordController.text);
+
                         Fluttertoast.showToast(
-                          msg: "Password updated successfully!",
+                          msg: "Password changed successfully!",
                           backgroundColor: Colors.green,
                           textColor: Colors.white,
                         );
-                        Navigator.of(context).pop();
-                      } catch (e) {
-                        Fluttertoast.showToast(
-                          msg: "Error updating password: ${e.toString()}",
-                          backgroundColor: Colors.red,
-                          textColor: Colors.white,
-                        );
+
+                        Navigator.pop(context);
                       }
-                    } else {
+                    } catch (e) {
                       Fluttertoast.showToast(
-                        msg: "Passwords do not match!",
+                        msg: "Failed to change password: $e",
                         backgroundColor: Colors.red,
                         textColor: Colors.white,
                       );
                     }
                   },
                   child: Text(
-                    'Update Password',
+                    'Change Password',
                     style: GoogleFonts.poppins(color: Colors.white),
                   ),
                 ),
@@ -414,40 +459,23 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildPasswordField(String label, TextEditingController controller, bool obscureText) {
-    bool _obscureText = obscureText;
-
-    return StatefulBuilder(
-      builder: (context, setState) {
-        return TextField(
-          controller: controller,
-          obscureText: _obscureText,
-          decoration: InputDecoration(
-            labelText: label,
-            labelStyle: GoogleFonts.poppins(color: Colors.black87),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            suffixIcon: IconButton(
-              icon: Icon(
-                _obscureText ? Icons.visibility : Icons.visibility_off,
-                color: Colors.black87,
-              ),
-              onPressed: () {
-                setState(() {
-                  _obscureText = !_obscureText;
-                });
-              },
-            ),
-          ),
-        );
-      },
+    return TextField(
+      controller: controller,
+      obscureText: obscureText,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: GoogleFonts.poppins(color: Colors.black87),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
     );
   }
 
   void _showChangeAccountInfoModal(BuildContext context) async {
     DocumentSnapshot userDoc = await FirebaseFirestore.instance
         .collection('USERS_ACCOUNTS')
-        .doc(userId)
+        .doc(widget.userId)
         .get();
 
     if (!userDoc.exists) {
@@ -461,9 +489,14 @@ class ProfileScreen extends StatelessWidget {
 
     Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
 
+    TextEditingController firstNameController = TextEditingController(text: userData['first_name'] ?? '');
+    TextEditingController middleNameController = TextEditingController(text: userData['middle_name'] ?? '');
+    TextEditingController lastNameController = TextEditingController(text: userData['last_name'] ?? '');
     TextEditingController emailController = TextEditingController(text: userData['email'] ?? '');
     TextEditingController phoneController = TextEditingController(text: userData['phone_number'] ?? '');
     TextEditingController dobController = TextEditingController(text: userData['date_of_birth'] ?? '');
+    TextEditingController truckNumberController = TextEditingController(text: userData['truck_number'] ?? '');
+    TextEditingController collectionZoneController = TextEditingController(text: userData['collection_zone'] ?? '');
 
     showModalBottomSheet(
       context: context,
@@ -489,6 +522,27 @@ class ProfileScreen extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
+                  ),
+                  SizedBox(height: 20),
+                  _buildEditableProfileField(
+                    Icons.person,
+                    'First Name',
+                    'Enter first name',
+                    firstNameController,
+                  ),
+                  SizedBox(height: 20),
+                  _buildEditableProfileField(
+                    Icons.person,
+                    'Middle Name',
+                    'Enter middle name',
+                    middleNameController,
+                  ),
+                  SizedBox(height: 20),
+                  _buildEditableProfileField(
+                    Icons.person,
+                    'Last Name',
+                    'Enter last name',
+                    lastNameController,
                   ),
                   SizedBox(height: 20),
                   _buildEditableProfileField(
@@ -538,6 +592,26 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                  SizedBox(height: 20),
+                  _buildEditableProfileField(
+                    Icons.local_shipping,
+                    'Truck Number',
+                    'Change Truck Number',
+                    truckNumberController,
+                  ),
+                  SizedBox(height: 20),
+                  GestureDetector(
+                    onTap: () => _showCollectionZoneMap(context, collectionZoneController),
+                    child: AbsorbPointer(
+                      child: _buildEditableProfileField(
+                        Icons.location_on,
+                        'Collection Zone',
+                        'Tap to select on map',
+                        collectionZoneController,
+                        isEditable: true,
+                      ),
+                    ),
+                  ),
                   SizedBox(height: 30),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
@@ -550,9 +624,13 @@ class ProfileScreen extends StatelessWidget {
                     onPressed: () async {
                       try {
                         await _updateUserInformation(
-                          emailController.text,
+                          firstNameController.text,
+                          middleNameController.text,
+                          lastNameController.text,
                           phoneController.text,
                           dobController.text,
+                          truckNumberController.text,
+                          collectionZoneController.text,
                         );
 
                         Fluttertoast.showToast(
@@ -617,52 +695,229 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Future<void> _updateUserInformation(
-      String email,
+      String firstName,
+      String middleName,
+      String lastName,
       String phoneNumber,
       String dateOfBirth,
+      String truckNumber,
+      String collectionZone,
       ) async {
-    if (email.isEmpty && phoneNumber.isEmpty && dateOfBirth.isEmpty) {
+    Map<String, dynamic> updates = {
+      'first_name': firstName,
+      'middle_name': middleName,
+      'last_name': lastName,
+      'phone_number': phoneNumber,
+      'date_of_birth': dateOfBirth,
+      'truck_number': truckNumber,
+      'collection_zone': collectionZone,
+    };
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('USERS_ACCOUNTS')
+          .doc(widget.userId)
+          .update(updates);
+
       Fluttertoast.showToast(
-        msg: "No changes detected. Please enter new information.",
-        toastLength: Toast.LENGTH_SHORT,
-        gravity: ToastGravity.BOTTOM,
+        msg: "Information updated successfully!",
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to update information: $e",
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
-      return;
     }
+  }
 
-    Map<String, dynamic> updates = {};
+  void _showCollectionZoneMap(BuildContext context, TextEditingController controller) async {
+    LatLng initialLocation;
 
-    if (email.isNotEmpty) {
-      updates['email'] = email;
-    }
-    if (phoneNumber.isNotEmpty) {
-      updates['phone_number'] = phoneNumber;
-    }
-    if (dateOfBirth.isNotEmpty) {
-      updates['date_of_birth'] = dateOfBirth;
-    }
-
-    if (updates.isNotEmpty) {
-      try {
-        await FirebaseFirestore.instance
-            .collection('USERS_ACCOUNTS')
-            .doc(userId)
-            .update(updates);
-
-        Fluttertoast.showToast(
-          msg: "Information updated successfully!",
-          backgroundColor: Colors.green,
-          textColor: Colors.white,
-        );
-      } catch (e) {
-        Fluttertoast.showToast(
-          msg: "Failed to update information: $e",
-          backgroundColor: Colors.red,
-          textColor: Colors.white,
-        );
+    // Try to parse the current collection zone
+    if (controller.text.isNotEmpty) {
+      List<String> coordinates = controller.text.split(',');
+      if (coordinates.length == 2) {
+        double? lat = double.tryParse(coordinates[0].trim());
+        double? lng = double.tryParse(coordinates[1].trim());
+        if (lat != null && lng != null) {
+          initialLocation = LatLng(lat, lng);
+          _selectedLocation = initialLocation;
+        }
       }
     }
+
+    // If parsing fails, use the current location
+    if (_selectedLocation == null) {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      initialLocation = LatLng(position.latitude, position.longitude);
+    } else {
+      initialLocation = _selectedLocation!;
+    }
+
+    _updateMarkers();
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(
+            title: Text('Select Collection Zone'),
+            backgroundColor: Colors.green,
+          ),
+          body: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: GooglePlaceAutoCompleteTextField(
+                  textEditingController: _searchController,
+                  googleAPIKey: kGoogleApiKey,
+                  inputDecoration: InputDecoration(
+                    hintText: "Search for a location",
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  debounceTime: 800,
+                  countries: ["ph"],
+                  isLatLngRequired: true,
+                  getPlaceDetailWithLatLng: (Prediction prediction) {
+                    if (prediction.lat != null && prediction.lng != null) {
+                      _searchLocation(LatLng(double.parse(prediction.lat!), double.parse(prediction.lng!)));
+                    }
+                  },
+                  itemClick: (Prediction prediction) {
+                    _searchController.text = prediction.description!;
+                    _searchController.selection = TextSelection.fromPosition(
+                      TextPosition(offset: prediction.description!.length),
+                    );
+                  },
+                ),
+              ),
+              Expanded(
+                child: GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: initialLocation,
+                    zoom: 14.0,
+                  ),
+                  onMapCreated: (GoogleMapController controller) {
+                    _mapController = controller;
+                  },
+                  markers: _markers,
+                  onTap: (LatLng location) {
+                    _showConfirmDialog(context, location);
+                  },
+                ),
+              ),
+            ],
+          ),
+          floatingActionButton: FloatingActionButton(
+            child: Icon(Icons.my_location),
+            backgroundColor: Colors.green,
+            onPressed: () {
+              if (_currentLocation != null) {
+                _mapController?.animateCamera(CameraUpdate.newLatLng(_currentLocation!));
+              }
+            },
+          ),
+        ),
+      ),
+    );
+
+    if (_selectedLocation != null) {
+      controller.text = '${_selectedLocation!.latitude}, ${_selectedLocation!.longitude}';
+    } else {
+      controller.text = '';
+    }
+  }
+
+  void _showConfirmDialog(BuildContext context, LatLng location) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.green.shade100, // Green background for the dialog
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16), // Rounded corners
+          ),
+          title: Text(
+            "Mark Collection Zone",
+            style: TextStyle(
+              color: Colors.green.shade800, // Darker green for title
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          content: Text(
+            "Do you want to mark this location as your collection zone?",
+            style: TextStyle(
+              color: Colors.green.shade700, // Slightly lighter green for content
+              fontSize: 16,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.green.shade800, backgroundColor: Colors.transparent, // Transparent background
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+              child: Text("No"),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _selectedLocation = location;
+                  _updateMarkers();
+                });
+                Navigator.of(context).pop();
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white, backgroundColor: Colors.green.shade700, // Green background for the "Yes" button
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+              child: Text("Yes"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
+  void _updateMarkers() {
+    setState(() {
+      _markers.clear();
+
+      if (_currentLocation != null) {
+        _markers.add(Marker(
+          markerId: MarkerId('current_location'),
+          position: _currentLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          infoWindow: InfoWindow(title: 'Current Location'),
+        ));
+      }
+
+      if (_selectedLocation != null) {
+        _markers.add(Marker(
+          markerId: MarkerId('selected_location'),
+          position: _selectedLocation!,
+          infoWindow: InfoWindow(title: 'Selected Collection Zone'),
+        ));
+      }
+    });
+  }
+
+  void _searchLocation(LatLng location) {
+    _mapController?.animateCamera(CameraUpdate.newLatLng(location));
+    setState(() {
+      _selectedLocation = location;
+      _updateMarkers();
+    });
   }
 }

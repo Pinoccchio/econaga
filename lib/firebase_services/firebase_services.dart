@@ -4,10 +4,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 class FirebaseServices {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
   // Function to create a user with Firebase Auth
   Future<User?> createUserWithEmailAndPassword(String email, String password) async {
-    UserCredential userCredential = await FirebaseAuth.instance
-        .createUserWithEmailAndPassword(email: email, password: password);
+    UserCredential userCredential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
     return userCredential.user;
   }
 
@@ -23,9 +24,16 @@ class FirebaseServices {
   // Function to save user data to Firestore
   Future<void> saveUserData(String userId, Map<String, dynamic> userData) async {
     await FirebaseFirestore.instance
-        .collection('USERS_ACCOUNTS') // Common collection for both clients and collectors
+        .collection('USERS_ACCOUNTS')
         .doc(userId)
         .set(userData);
   }
 
+  // Function to send email verification to the currently signed-in user
+  Future<void> sendEmailVerification() async {
+    final user = _auth.currentUser;
+    if (user != null && !user.emailVerified) {
+      await user.sendEmailVerification();
+    }
+  }
 }

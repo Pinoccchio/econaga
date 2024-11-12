@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../client_home_page/client_home_page_container.dart';
 import '../client_sign_up_screen/client_sign_up_screen.dart';
+import '../client_sign_up_screen/email_verification_screen.dart';
 
 class ClientSignInScreen extends StatefulWidget {
   @override
@@ -44,40 +45,56 @@ class _ClientSignInScreenState extends State<ClientSignInScreen> {
 
         User? user = userCredential.user;
         if (user != null) {
-          DocumentSnapshot userDoc = await FirebaseFirestore.instance
-              .collection('USERS_ACCOUNTS')
-              .doc(user.uid)
-              .get();
+          // Check if the email is verified
+          if (!user.emailVerified) {
+            // If not verified, redirect to email verification page
+            Fluttertoast.showToast(
+              msg: "Please verify your email before logging in.",
+              backgroundColor: Colors.red,
+              textColor: Colors.white,
+            );
+            await user.sendEmailVerification(); // Send a new verification email
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => EmailVerificationScreen(email: _emailController.text)), // Navigate to Email Verification screen
+            );
+          } else {
+            // User is verified, proceed to home screen
+            DocumentSnapshot userDoc = await FirebaseFirestore.instance
+                .collection('USERS_ACCOUNTS')
+                .doc(user.uid)
+                .get();
 
-          if (userDoc.exists) {
-            Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
+            if (userDoc.exists) {
+              Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
 
-            if (userData != null && userData['role'] == 'client') {
-              Fluttertoast.showToast(
-                msg: "Welcome, ${userData['first_name'] ?? ''} ${userData['last_name'] ?? ''}!".trim(),
-                backgroundColor: Colors.green,
-                textColor: Colors.white,
-              );
+              if (userData != null && userData['role'] == 'client') {
+                Fluttertoast.showToast(
+                  msg: "Welcome, ${userData['first_name'] ?? ''} ${userData['last_name'] ?? ''}!".trim(),
+                  backgroundColor: Colors.green,
+                  textColor: Colors.white,
+                );
 
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ClientHomeScreenContainer(userId: user.uid),
-                ),
-              );
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ClientHomeScreenContainer(userId: user.uid),
+                  ),
+                );
+              } else {
+                Fluttertoast.showToast(
+                  msg: "You are not registered as a client.",
+                  backgroundColor: Colors.red,
+                  textColor: Colors.white,
+                );
+              }
             } else {
               Fluttertoast.showToast(
-                msg: "You are not registered as a client.",
+                msg: "No user data found.",
                 backgroundColor: Colors.red,
                 textColor: Colors.white,
               );
             }
-          } else {
-            Fluttertoast.showToast(
-              msg: "No user data found.",
-              backgroundColor: Colors.red,
-              textColor: Colors.white,
-            );
           }
         }
       } on FirebaseAuthException catch (e) {
@@ -100,9 +117,93 @@ class _ClientSignInScreenState extends State<ClientSignInScreen> {
     }
   }
 
-  void _forgotPassword() {
-    // Implement forgot password logic here
+
+  void _forgotPassword() async {
+    final TextEditingController forgotPasswordController = TextEditingController();
+    final _formKey = GlobalKey<FormState>();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        backgroundColor: Colors.green.shade50,
+        title: Text(
+          "Forgot Password",
+          style: TextStyle(
+            color: Colors.green.shade700,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Form(
+          key: _formKey,
+          child: TextFormField(
+            controller: forgotPasswordController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: InputDecoration(
+              hintText: "Enter your email",
+              hintStyle: TextStyle(color: Colors.green.shade300),
+              fillColor: Colors.green.shade100,
+              filled: true,
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.green.shade300),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.green.shade700),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter your email';
+              } else if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                return 'Please enter a valid email';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              "Cancel",
+              style: TextStyle(color: Colors.green.shade700),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (_formKey.currentState?.validate() ?? false) {
+                String email = forgotPasswordController.text.trim();
+                try {
+                  await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                  Fluttertoast.showToast(
+                    msg: "Password reset link sent to $email",
+                    backgroundColor: Colors.green,
+                    textColor: Colors.white,
+                  );
+                  Navigator.of(context).pop();
+                } catch (e) {
+                  Fluttertoast.showToast(
+                    msg: "Error sending reset link",
+                    backgroundColor: Colors.red,
+                    textColor: Colors.white,
+                  );
+                }
+              }
+            },
+            child: Text(
+              "Send",
+              style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
+
 
   void _goToSignUp() {
     Navigator.push(

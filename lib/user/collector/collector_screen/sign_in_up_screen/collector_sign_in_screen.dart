@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../collector_home_screen/collector_container_screen.dart';
-import 'collector_sign_up_screen.dart';
 
 class CollectorSignInScreen extends StatefulWidget {
   @override
@@ -52,7 +51,7 @@ class _CollectorSignInScreenState extends State<CollectorSignInScreen> {
           if (userDoc.exists) {
             Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
 
-            if (userData != null && userData['role'] == 'collector') {
+            if (userData != null && userData['status'] == 'active') {
               Fluttertoast.showToast(
                 msg: "Welcome, ${userData['first_name'] ?? ''} ${userData['last_name'] ?? ''}!".trim(),
                 backgroundColor: Colors.green,
@@ -67,14 +66,14 @@ class _CollectorSignInScreenState extends State<CollectorSignInScreen> {
               );
             } else {
               Fluttertoast.showToast(
-                msg: "You are not registered as a collector.",
+                msg: "Your account is not active. Please contact the administrator.",
                 backgroundColor: Colors.red,
                 textColor: Colors.white,
               );
             }
           } else {
             Fluttertoast.showToast(
-              msg: "No user data found.",
+              msg: "No user data found. Please contact the administrator.",
               backgroundColor: Colors.red,
               textColor: Colors.white,
             );
@@ -102,13 +101,6 @@ class _CollectorSignInScreenState extends State<CollectorSignInScreen> {
 
   void _forgotPassword() {
     // Implement forgot password logic here
-  }
-
-  void _goToSignUp() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => CollectorSignUpScreen()),
-    );
   }
 
   @override
@@ -176,13 +168,11 @@ class _CollectorSignInScreenState extends State<CollectorSignInScreen> {
                           ),
                           SizedBox(height: 24),
                           _buildSignInButton(),
-                          SizedBox(height: 16),
-                          _buildForgotPasswordLink(),
+                          //SizedBox(height: 16),
+                          //_buildForgotPasswordLink(),
                         ],
                       ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2, end: 0),
                     ),
-                    SizedBox(height: 50),
-                    _buildSignUpLink(),
                   ],
                 ),
               ),
@@ -256,25 +246,6 @@ class _CollectorSignInScreenState extends State<CollectorSignInScreen> {
         "Forgot Password?",
         style: TextStyle(color: Colors.white),
       ),
-    );
-  }
-
-  Widget _buildSignUpLink() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text("Don't have an account?", style: TextStyle(color: Colors.white70)),
-        TextButton(
-          onPressed: _goToSignUp,
-          child: Text(
-            "Sign Up",
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

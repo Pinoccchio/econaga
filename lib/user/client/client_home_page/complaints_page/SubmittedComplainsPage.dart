@@ -1,18 +1,20 @@
-import 'package:econaga_prj/designs/app_colors.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
-import 'ComplaintDetailsPage.dart';
+import '../../../../designs/app_colors.dart';
+import 'ComplaintDetailPage.dart';  // Ensure this path is correct
+import 'package:intl/intl.dart';
 
 class SubmittedComplaintsPage extends StatefulWidget {
+  final String userId;
+
+  SubmittedComplaintsPage({required this.userId});
+
   @override
   _SubmittedComplaintsPageState createState() =>
       _SubmittedComplaintsPageState();
 }
 
 class _SubmittedComplaintsPageState extends State<SubmittedComplaintsPage> {
-  // To track the resolved status of each complaint
-  List<bool> isResolvedList = [false, false, false]; // Modify size based on your data
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -26,71 +28,67 @@ class _SubmittedComplaintsPageState extends State<SubmittedComplaintsPage> {
           },
         ),
       ),
-      body: ListView.builder(
-        itemCount: isResolvedList.length, // Replace with dynamic count of complaints
-        itemBuilder: (context, index) {
-          return GestureDetector(
-            onLongPress: () {
-              // Show options to delete or mark as resolved
-              showMenuOptions(context, index);
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('COMPLAINTS')
+            .where('userId', isEqualTo: widget.userId)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          var complaints = snapshot.data!.docs;
+
+          if (complaints.isEmpty) {
+            return Center(child: Text('No complaints submitted yet.'));
+          }
+
+          return ListView.builder(
+            itemCount: complaints.length,
+            itemBuilder: (context, index) {
+              var complaint = complaints[index];
+              var complaintId = complaint.id;
+
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundImage: AssetImage(
+                      'lib/components/assets/images/official_logo.png'),
+                ),
+                title: Text('To: Admin'),
+                subtitle: Text(complaint['complaint']),
+                trailing: Text(
+                    'Submitted: ${_parseTimestamp(complaint['timestamp'])}'),
+                onTap: () {
+                  /*
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ComplaintDetailPage(
+                        complaintId: complaintId,
+                        userId: widget.userId,
+                      ),
+                    ),
+                  );
+
+                   */
+                },
+              );
             },
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundImage: AssetImage(
-                    'lib/components/assets/images/official_logo.png'), // Placeholder image
-              ),
-              title: Text('To: Admin'),
-              subtitle: Text('Magandang Araw, wala pong dumaan na Garbage truck...'),
-              trailing: Text('3:30 AM'),
-              tileColor: isResolvedList[index] ? Colors.lightGreen[200] : null, // Change background if resolved
-              onTap: () {
-                // Navigate to the complaint detail page
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ComplaintDetailPage(),
-                  ),
-                );
-              },
-            ),
           );
         },
       ),
     );
   }
 
-  // Show options on long press
-  void showMenuOptions(BuildContext context, int index) {
-    showModalBottomSheet(
-      context: context,
-      builder: (BuildContext context) {
-        return Wrap(
-          children: [
-            ListTile(
-              leading: Icon(Icons.check_circle),
-              title: Text(isResolvedList[index] ? 'Unmark as Resolved' : 'Mark as Resolved'),
-              onTap: () {
-                // Toggle resolved status and update the UI
-                setState(() {
-                  isResolvedList[index] = !isResolvedList[index];
-                });
-                Navigator.pop(context); // Close the bottom sheet
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.delete),
-              title: Text('Delete'),
-              onTap: () {
-                // Delete the item and update the UI
-                setState(() {
-                  isResolvedList.removeAt(index);
-                });
-                Navigator.pop(context); // Close the bottom sheet
-              },
-            ),
-          ],
-        );
-      },
-    );
+  String _parseTimestamp(dynamic timestamp) {
+    if (timestamp == null) return 'N/A';
+    try {
+      return DateFormat('MMM d, y HH:mm')
+          .format((timestamp as Timestamp).toDate());
+    } catch (e) {
+      print('Error parsing timestamp: $e');
+      return 'Invalid Date';
+    }
   }
 }

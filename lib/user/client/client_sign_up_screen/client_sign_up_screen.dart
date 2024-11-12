@@ -1,11 +1,17 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../firebase_services/firebase_services.dart';
 import '../client_sign_in_screen/client_sign_in_screen.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'email_verification_screen.dart';
 
 class ClientSignUpScreen extends StatefulWidget {
   @override
@@ -27,6 +33,7 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
 
   bool _isLoading = false;
   bool isChecked = false;
+  bool _obscureText = true;
   File? idImage;
   File? selfieImage;
   String? selectedRegion;
@@ -34,9 +41,15 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
   String? selectedMunicipality;
   String? selectedBarangay;
   String? selectedIdType;
+  LatLng? _selectedLocation;
 
   @override
   Widget build(BuildContext context) {
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: Colors.green.shade700,
+      statusBarIconBrightness: Brightness.light,
+    ));
+
     return SafeArea(
       child: Scaffold(
         body: CustomScrollView(
@@ -46,11 +59,13 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
               floating: false,
               pinned: true,
               flexibleSpace: FlexibleSpaceBar(
-                title: Text('Client Sign Up',
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    )),
+                title: Text(
+                  'Client Sign Up',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 background: Image.asset(
                   'lib/components/assets/images/official_logo.png',
                   fit: BoxFit.cover,
@@ -69,7 +84,7 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
                       SizedBox(height: 24),
                       _buildRegionDropDown(),
                       SizedBox(height: 24),
-                      _buildTextField(addressController, "Address", icon: Icons.location_on, readOnly: true),
+                      _buildAddressField(),
                       SizedBox(height: 20),
                       _buildPrivacyPolicyCheckBox(),
                       _buildSignUpButton(),
@@ -89,7 +104,7 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
     return [
       _buildTextField(emailController, "Email Address", icon: Icons.email, textInputType: TextInputType.emailAddress),
       SizedBox(height: 16),
-      _buildTextField(passwordController, "Password", icon: Icons.lock, obscureText: true),
+      _buildPasswordField(),
       SizedBox(height: 16),
       _buildTextField(firstNameController, "First Name", icon: Icons.person),
       SizedBox(height: 16),
@@ -158,6 +173,46 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
     );
   }
 
+  Widget _buildPasswordField() {
+    return TextFormField(
+      controller: passwordController,
+      obscureText: _obscureText,
+      style: GoogleFonts.poppins(fontSize: 16),
+      decoration: InputDecoration(
+        labelText: 'Password',
+        prefixIcon: Icon(Icons.lock, color: Colors.green),
+        suffixIcon: IconButton(
+          icon: Icon(
+            _obscureText ? Icons.visibility_off : Icons.visibility,
+            color: Colors.green,
+          ),
+          onPressed: () {
+            setState(() {
+              _obscureText = !_obscureText;
+            });
+          },
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.green),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.green, width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.green.withOpacity(0.1),
+      ),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Password is required';
+        }
+        // Add additional password validation if needed
+        return null;
+      },
+    );
+  }
+
   Widget _buildDropDown(String hintText, List<String> items, {IconData? icon, Function(String?)? onChanged}) {
     return DropdownButtonFormField<String>(
       decoration: InputDecoration(
@@ -213,9 +268,17 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
           style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         SizedBox(height: 16),
-        _buildImageUploadButton('Upload ID Photo', () => _pickImage('id')),
-        SizedBox(height: 8),
-        _buildImageUploadButton('Upload Selfie with ID', () => _pickImage('selfie')),
+        Row(
+          children: [
+            Expanded(
+              child: _buildImageUploadButton('Upload ID Photo', () => _pickImage('id')),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: _buildImageUploadButton('Upload Selfie with ID', () => _pickImage('selfie')),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -364,9 +427,8 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
         _buildDropDown(
           "Barangay",
           ["Agingay", "Bagumbayan", "Bagsak", "Balatas", "Cararayan", "Concepcion Pequeña", "Concepcion Grande",
-            "Del Rosario", "Divisoria", "Ermita", "Liboton", "Mabolo", "Magsaysay", "Nabua", "Pacol",
-            "Pangpang", "San Felipe", "San Francisco", "San Jose", "San Juan", "San Nicolas", "San Pedro",
-            "San Rafael", "San Roque", "Santa Cruz", "Santa Fe", "Santa Lucia", "Santa Maria",
+            "Del Rosario", "Divisoria", "Ermita", "Liboton", "Mabolo", "Magsaysay", "Nabua", "Pacol", "Pangpang", "San Felipe", "San Francisco", "San Jose", "San Juan", "San Nicolas",
+            "San Pedro", "San Rafael", "San Roque", "Santa Cruz", "Santa Fe", "Santa Lucia", "Santa Maria",
             "Santa Teresita", "Santo Niño", "Santo Domingo"],
           icon: Icons.home,
           onChanged: (value) {
@@ -377,6 +439,31 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildAddressField() {
+    return GestureDetector(
+      onTap: () {
+        if (addressController.text.isNotEmpty) {
+          _showMap();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Please fill in the address details first'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      },
+      child: AbsorbPointer(
+        child: _buildTextField(
+          addressController,
+          "Address",
+          icon: Icons.location_on,
+          readOnly: true,
+        ),
+      ),
     );
   }
 
@@ -430,13 +517,105 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
         }
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Image uploaded successfully')),
+        SnackBar(
+          content: Text('Image uploaded successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showMap() async {
+    try {
+      List<Location> locations = await locationFromAddress(addressController.text);
+      if (locations.isNotEmpty) {
+        setState(() {
+          _selectedLocation = LatLng(locations.first.latitude, locations.first.longitude);
+        });
+
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              backgroundColor: Colors.green.shade50,
+              title: Text(
+                'Location Map',
+                style: TextStyle(
+                  color: Colors.green.shade800,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: Container(
+                width: MediaQuery.of(context).size.width,
+                height: 300,
+                child: GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: _selectedLocation!,
+                    zoom: 15,
+                  ),
+                  markers: {
+                    Marker(
+                      markerId: MarkerId('selected_location'),
+                      position: _selectedLocation!,
+                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+                    ),
+                  },
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.green.shade800,
+                  ),
+                  child: Text('Close'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Location not found'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.green,
+        ),
       );
     }
   }
 
   Future<void> _signUpClient() async {
-    if (_formKey.currentState!.validate() && isChecked) {
+    if (_formKey.currentState!.validate()) {
+      if (!isChecked) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please agree to the terms and conditions'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      if (idImage == null || selfieImage == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please upload both ID photo and selfie with ID'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
       setState(() {
         _isLoading = true;
       });
@@ -448,22 +627,17 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
         );
 
         if (user != null) {
-          String? idImageUrl;
-          String? selfieImageUrl;
+          await user.sendEmailVerification();
 
-          if (idImage != null) {
-            idImageUrl = await _firebaseServices.uploadImageToFirebase(
-              idImage!,
-              'clients/${user.uid}/id_image',
-            );
-          }
+          String? idImageUrl = await _firebaseServices.uploadImageToFirebase(
+            idImage!,
+            'clients/${user.uid}/id_image',
+          );
 
-          if (selfieImage != null) {
-            selfieImageUrl = await _firebaseServices.uploadImageToFirebase(
-              selfieImage!,
-              'clients/${user.uid}/selfie_image',
-            );
-          }
+          String? selfieImageUrl = await _firebaseServices.uploadImageToFirebase(
+            selfieImage!,
+            'clients/${user.uid}/selfie_image',
+          );
 
           await _firebaseServices.saveUserData(user.uid, {
             'first_name': firstNameController.text,
@@ -479,20 +653,22 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
             'selfie_image_url': selfieImageUrl,
             'created_at': DateTime.now().toIso8601String(),
             'role': 'client',
+            'location': _selectedLocation != null
+                ? GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude)
+                : null,
           });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Sign up successful!')),
-          );
 
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => ClientSignInScreen()),
+            MaterialPageRoute(builder: (context) => EmailVerificationScreen(email: emailController.text)),
           );
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
         );
       } finally {
         setState(() {
@@ -501,7 +677,10 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please fill all fields and accept the terms')),
+        SnackBar(
+          content: Text('Please fill all required fields'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }

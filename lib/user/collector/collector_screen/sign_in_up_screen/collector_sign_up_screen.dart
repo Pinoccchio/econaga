@@ -1,8 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../components/widgets/app_bar/custom_text_form_field.dart';
-import '../../../../components/widgets/custom_drop_down.dart';
 import '../../../../firebase_services/firebase_services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -24,8 +22,6 @@ class _CollectorSignUpScreenState extends State<CollectorSignUpScreen> {
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController phoneNumberController = TextEditingController();
   final TextEditingController addressController = TextEditingController();
-  final TextEditingController vehicleDetailsController = TextEditingController();
-  final TextEditingController collectionZoneController = TextEditingController();
   final TextEditingController dateOfBirthController = TextEditingController();
 
   bool _isLoading = false;
@@ -118,10 +114,6 @@ class _CollectorSignUpScreenState extends State<CollectorSignUpScreen> {
       SizedBox(height: 16),
       _buildTextField(phoneNumberController, "Contact Number", icon: Icons.phone, textInputType: TextInputType.phone),
       SizedBox(height: 16),
-      _buildTextField(vehicleDetailsController, "Vehicle Details", icon: Icons.directions_car),
-      SizedBox(height: 16),
-      _buildTextField(collectionZoneController, "Collection Zone", icon: Icons.map),
-      SizedBox(height: 24),
       _buildImageUploadSection(),
     ];
   }
@@ -478,8 +470,6 @@ class _CollectorSignUpScreenState extends State<CollectorSignUpScreen> {
             'date_of_birth': dateOfBirthController.text,
             'phone_number': phoneNumberController.text,
             'address': addressController.text,
-            'vehicle_details': vehicleDetailsController.text,
-            'collection_zone': collectionZoneController.text,
             'id_image_url': idImageUrl,
             'selfie_image_url': selfieImageUrl,
             'created_at': DateTime.now().toIso8601String(),

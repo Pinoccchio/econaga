@@ -10,6 +10,7 @@ import 'package:econaga_prj/firebase_options.dart';
 import 'package:econaga_prj/user/collector/collector_home_screen/collector_container_screen.dart';
 import 'package:econaga_prj/user/login_as_screen/login_as_screen.dart';
 import 'package:econaga_prj/user/welcome_screen/welcome_screen.dart';
+import 'package:geolocator/geolocator.dart'; // Import Geolocator
 
 import 'components/theme/theme_helper.dart'; // Custom theme helper for dynamic theme switching
 
@@ -47,6 +48,29 @@ void main() async {
   ThemeHelper().changeTheme('primary');
 
   runApp(MyApp());
+
+  // Ensure Geolocator is initialized by checking permission after Flutter is fully initialized
+  _checkLocationPermission();
+}
+
+Future<void> _checkLocationPermission() async {
+  try {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.deniedForever) {
+        print('Location permissions are permanently denied.');
+      } else if (permission == LocationPermission.denied) {
+        print('Location permissions are denied.');
+      } else {
+        print('Location permissions granted.');
+      }
+    } else {
+      print('Location permissions already granted.');
+    }
+  } catch (e) {
+    print('Error checking location permission: $e');
+  }
 }
 
 class MyApp extends StatelessWidget {

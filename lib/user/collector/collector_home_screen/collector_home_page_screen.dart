@@ -49,15 +49,18 @@ class CollectorHomePage extends StatelessWidget {
 
         var userData = snapshot.data!.data() as Map<String, dynamic>;
         String name = '${userData['first_name'] ?? ''} ${userData['middle_name'] ?? ''} ${userData['last_name'] ?? ''}'.trim();
-        String profileImageUrl = userData['profile_picture'] ?? '';
+        String selfieImageUrl = userData['selfieImageUrl'] ?? '';
 
         return Row(
           children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundImage: profileImageUrl.isNotEmpty
-                  ? NetworkImage(profileImageUrl)
-                  : AssetImage('lib/components/assets/images/default_profile_pic.jpg') as ImageProvider,
+            GestureDetector(
+              onTap: () => _showProfileDialog(context, selfieImageUrl),
+              child: CircleAvatar(
+                radius: 30,
+                backgroundImage: selfieImageUrl.isNotEmpty
+                    ? NetworkImage(selfieImageUrl)
+                    : AssetImage('lib/components/assets/images/default_profile_pic.jpg') as ImageProvider,
+              ),
             ),
             SizedBox(width: 12),
             Column(
@@ -71,7 +74,7 @@ class CollectorHomePage extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Truck Driver',
+                  'Collector',
                   style: GoogleFonts.poppins(
                     fontSize: 12,
                     color: Colors.grey[600],
@@ -80,6 +83,32 @@ class CollectorHomePage extends StatelessWidget {
               ],
             ),
           ],
+        );
+      },
+    );
+  }
+
+  void _showProfileDialog(BuildContext context, String profileImageUrl) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            width: 200,
+            height: 200,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              image: DecorationImage(
+                fit: BoxFit.cover,
+                image: profileImageUrl.isNotEmpty
+                    ? NetworkImage(profileImageUrl)
+                    : AssetImage('lib/components/assets/images/default_profile_pic.jpg') as ImageProvider,
+              ),
+            ),
+          ),
         );
       },
     );

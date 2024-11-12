@@ -27,7 +27,7 @@ class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
       RequestPage(userId: widget.userId), // Pass userId to RequestPage
       NotificationPage(),
       ClientHomePage(onRequestNow: _navigateToRequestPage, userId: widget.userId),
-      ComplaintsPage(),
+      ComplaintsPage(userId: widget.userId),
       AccountPage(userId: widget.userId), // Pass userId to AccountPage
     ]);
   }

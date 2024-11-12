@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../accounts_page/admin_account_page.dart';
+import '../complaints_page/admin_complaints_page.dart';
+import '../requests_page/admin_burial_service.dart';
 import '../requests_page/admin_garbage_collection_request.dart';
+import '../requests_page/admin_lipat_bahay_service.dart';
 import 'admin_dashboard.dart';
 import 'admin_sign_in_page.dart';
 
@@ -75,7 +79,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           ),
           SizedBox(width: 10),
           CircleAvatar(
-            backgroundImage: AssetImage('lib/components/assets/images/sample-profile-pic.png'),
+            backgroundImage: AssetImage('lib/components/assets/images/official_logo.png'),
           ),
           SizedBox(width: 10),
           StreamBuilder<DocumentSnapshot>(
@@ -129,7 +133,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     title: Text('Request'),
                     children: [
                       _buildListTile('Garbage Collection', null, 'GarbageCollection'),
-                      _buildListTile('Burial Service', null, 'BurialService'),
+                      _buildListTile('Burial Service', null, 'BurialService'), // Added Burial Service
                       _buildListTile('Lipat Bahay', null, 'LipatBahay'),
                     ],
                   ),
@@ -146,12 +150,21 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 ? DashboardContent()
                 : _currentPage == 'GarbageCollection'
                 ? AdminGarbageCollectionRequest()
+                : _currentPage == 'BurialService'
+                ? AdminBurialServiceRequest()
+                : _currentPage == 'LipatBahay'
+                ? AdminLipatBahayServiceRequest()
+                : _currentPage == 'Complaints'
+                ? ComplaintsOverview()
+                : _currentPage == 'Account' // Navigate to AdminAccountPage when 'Account' is clicked
+                ? AdminAccountPage()
                 : Center(child: Text('Content for $_currentPage')),
           ),
         ],
       ),
     );
   }
+
 
   Widget _buildListTile(String title, IconData? icon, String page, {Color color = Colors.green}) {
     return ListTile(

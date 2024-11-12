@@ -1,3 +1,4 @@
+import 'package:econaga_prj/freeuse_homepage/freeuse_homepage_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -5,7 +6,6 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../client/client_home_page/client_home_page_container.dart';
 import '../collector/collector_home_screen/collector_container_screen.dart';
-import '../login_as_screen/login_as_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   @override
@@ -24,6 +24,18 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent, // Make the background transparent
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors:  [Colors.green.shade300, Colors.green.shade300],
+            ),
+          ),
+        ),
+      ),
       body: GestureDetector(
         onTap: _navigateToNextScreen,
         child: Container(
@@ -50,6 +62,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       ),
     );
   }
+
+
 
   Widget _buildLogo() {
     return Container(
@@ -146,13 +160,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
           _showWelcomeToast(fullName);
         } else {
+          _navigateTo(FreeUseHomePage());
           _showErrorToast("User document does not exist.");
         }
       } catch (e) {
         _showErrorToast("Error fetching user data: $e");
       }
     } else {
-      _navigateTo(LoginAsScreen());
+      _navigateTo(FreeUseHomePage());
     }
   }
 

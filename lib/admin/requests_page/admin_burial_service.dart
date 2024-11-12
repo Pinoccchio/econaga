@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-class AdminGarbageCollectionRequest extends StatefulWidget {
+class AdminBurialServiceRequest extends StatefulWidget {
   @override
-  _AdminGarbageCollectionRequestState createState() => _AdminGarbageCollectionRequestState();
+  _AdminBurialServiceRequestState createState() => _AdminBurialServiceRequestState();
 }
 
-class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRequest> {
+class _AdminBurialServiceRequestState extends State<AdminBurialServiceRequest> {
   String searchQuery = '';
   List<DocumentSnapshot> allRequests = [];
   List<DocumentSnapshot> filteredRequests = [];
@@ -21,7 +21,7 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
 
   Future<void> _fetchRequests() async {
     final snapshot = await FirebaseFirestore.instance
-        .collection('GARBAGE_REQUESTS')
+        .collection('BURIAL_REQUESTS')
         .orderBy('created_at', descending: true)
         .get();
 
@@ -47,7 +47,7 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: Text('Garbage Collection Requests'),
+        title: Text('Burial Service Requests'),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
@@ -140,9 +140,9 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
     String lastName = data['last_name'] as String? ?? '';
     String email = data['email'] as String? ?? '';
     String contactNumber = data['contact_number'] as String? ?? 'N/A';
-    Map<String, dynamic> location = data['location'] as Map<String, dynamic>? ?? {};
+    Map<String, dynamic> pickupLocation = data['pickup_location'] as Map<String, dynamic>? ?? {};
+    Map<String, dynamic> destinationLocation = data['destination_location'] as Map<String, dynamic>? ?? {};
     String userId = data['user_id'] as String? ?? '';
-    String note = data['note'] as String? ?? 'N/A';
 
     return Card(
       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -160,16 +160,16 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
             subtitle: Text(contactNumber),
           ),
           ListTile(
-            title: Text('Address'),
-            subtitle: Text(location['address'] as String? ?? 'N/A'),
+            title: Text('Pickup Location'),
+            subtitle: _buildLocationInfo(pickupLocation),
           ),
           ListTile(
-            title: Text('Note'),
-            subtitle: Text(note),
+            title: Text('Destination Location'),
+            subtitle: _buildLocationInfo(destinationLocation),
           ),
           ListTile(
             title: Text('Status'),
-            subtitle: Text(data['status'] as String? ?? 'pending'),
+            subtitle: Text(data['status'] as String? ?? 'N/A'),
           ),
           Padding(
             padding: EdgeInsets.all(16),
@@ -199,6 +199,21 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
     );
   }
 
+  Widget _buildLocationInfo(Map<String, dynamic> location) {
+    String address = location['address'] as String? ?? 'N/A';
+    double latitude = location['latitude'] as double? ?? 0.0;
+    double longitude = location['longitude'] as double? ?? 0.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(address),
+        Text('Lat: ${latitude.toStringAsFixed(6)}'),
+        Text('Long: ${longitude.toStringAsFixed(6)}'),
+      ],
+    );
+  }
+
   Widget _buildProfilePicture(String userId) {
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance.collection('USERS_ACCOUNTS').doc(userId).get(),
@@ -221,7 +236,7 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
   }
 
   void _deleteRequest(String docId) {
-    FirebaseFirestore.instance.collection('GARBAGE_REQUESTS').doc(docId).delete().then((_) {
+    FirebaseFirestore.instance.collection('BURIAL_REQUESTS').doc(docId).delete().then((_) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Request deleted successfully')),
       );
@@ -235,7 +250,7 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
 
   void updateRequestStatus(String docId, String status) {
     FirebaseFirestore.instance
-        .collection('GARBAGE_REQUESTS')
+        .collection('BURIAL_REQUESTS')
         .doc(docId)
         .update({'status': status}).then((_) {
       ScaffoldMessenger.of(context).showSnackBar(
