@@ -6,9 +6,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import '../../../designs/app_colors.dart';
-import '../client_garbageCollection_screen/approval_dialog.dart';
+import '../client_garbage_collection_screen/approval_dialog.dart';
 
 class ClientTransportationScreen extends StatefulWidget {
   final String userId;
@@ -31,8 +30,7 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
   Set<Marker> _markers = {};
   String _pickupAddress = 'Tap on the map to select Pickup location';
   String _destinationAddress = 'Tap on the map to select Destination location';
-  bool _isLocationUpdating = false; // Flag to check if location is updating
-
+  bool _isLocationUpdating = false;
 
   MapType _selectedMapType = MapType.normal;
 
@@ -45,6 +43,7 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
   String _lastName = '';
   String _email = '';
   String _contactNumber = '';
+  bool _isExternalClient = false;
 
   @override
   void initState() {
@@ -72,7 +71,7 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
       print('Fetching user data for userId: ${widget.userId}');
       DocumentSnapshot doc = await FirebaseFirestore.instance
           .collection('USERS_ACCOUNTS')
-          .doc(widget.userId) // Access document by userId
+          .doc(widget.userId)
           .get();
 
       if (doc.exists) {
@@ -82,7 +81,6 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
           _email = doc['email'] ?? '';
           _contactNumber = doc['phone_number'] ?? '';
 
-          // Update controllers with fetched data
           _firstNameController.text = _firstName;
           _lastNameController.text = _lastName;
           _emailController.text = _email;
@@ -101,10 +99,9 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
     }
   }
 
-
   void _addMarker(LatLng position, String locationType) {
     setState(() {
-      _isLocationUpdating = true; // Start updating location
+      _isLocationUpdating = true;
       if (locationType == 'pickup') {
         _pickupLocation = position;
         _pickupAddress = 'Updating...';
@@ -137,7 +134,6 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
     });
   }
 
-
   void _updateAddress(LatLng position, String locationType) async {
     try {
       List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
@@ -149,17 +145,16 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
           } else {
             _destinationAddress = '${place.street}, ${place.locality}, ${place.country}';
           }
-          _isLocationUpdating = false; // Stop updating location
+          _isLocationUpdating = false;
         });
       }
     } catch (e) {
       print('Error: $e');
       setState(() {
-        _isLocationUpdating = false; // Stop updating location
+        _isLocationUpdating = false;
       });
     }
   }
-
 
   void _onMapTap(LatLng position, String locationType) {
     _addMarker(position, locationType);
@@ -249,6 +244,20 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
               ),
             ),
             SizedBox(height: 16),
+            Row(
+              children: [
+                Text('External Client', style: GoogleFonts.poppins()),
+                Switch(
+                  value: _isExternalClient,
+                  onChanged: (value) {
+                    setState(() {
+                      _isExternalClient = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+            SizedBox(height: 12),
             _buildTextField('First Name', _firstNameController, 'Please enter your first name'),
             SizedBox(height: 12),
             _buildTextField('Last Name', _lastNameController, 'Please enter your last name'),
@@ -305,7 +314,7 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
           ],
           onChanged: (MapType? type) {
             setState(() {
-              _selectedMapType = type ?? MapType.normal;
+              _selectedMapType = type ?? MapType.hybrid;
             });
           },
         ),
@@ -344,7 +353,6 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
                     height: 200,
                     child: GestureDetector(
                       onTap: () {
-                        // Disable the scroll interruption here
                         FocusScope.of(context).unfocus();
                       },
                       child: GoogleMap(
@@ -396,10 +404,10 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
       width: double.infinity,
       child: ElevatedButton(
         onPressed: _isLocationUpdating
-            ? null // Disable the button while location is updating
+            ? null
             : () {
           if (_formKey.currentState!.validate()) {
-            _submitServiceRequest(serviceType); // Call the method to submit request with service type
+            _submitServiceRequest(serviceType);
           }
         },
         child: Text(
@@ -408,7 +416,7 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
         ),
         style: ElevatedButton.styleFrom(
           foregroundColor: Colors.white,
-          backgroundColor: _isLocationUpdating ? Colors.grey : Colors.green, // Change color based on location status
+          backgroundColor: _isLocationUpdating ? Colors.grey : Colors.green,
           padding: EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -416,28 +424,24 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
     );
   }
 
-
   void _submitServiceRequest(String serviceType) async {
-    // Check if any of the required fields are empty
     if (_firstNameController.text.isEmpty ||
         _lastNameController.text.isEmpty ||
         _emailController.text.isEmpty ||
         _contactNumberController.text.isEmpty) {
-      // Show red SnackBar for error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'Please fill in all required fields.',
             style: TextStyle(color: Colors.white),
           ),
-          backgroundColor: Colors.red,  // Red color for the error
+          backgroundColor: Colors.red,
           duration: Duration(seconds: 3),
         ),
       );
-      return;  // Stop further execution
+      return;
     }
 
-    // Check if both pickup and destination locations have been selected
     if (_pickupLocation == null || _destinationLocation == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -445,21 +449,18 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
             'Please select both pickup and destination locations on the map.',
             style: TextStyle(color: Colors.white),
           ),
-          backgroundColor: Colors.red,  // Red color for the error
+          backgroundColor: Colors.red,
           duration: Duration(seconds: 3),
         ),
       );
-      return;  // Stop further execution
+      return;
     }
 
-    // Determine Firestore collection based on service type
     String collection = serviceType == 'burial'
         ? 'BURIAL_REQUESTS'
         : 'TRANSPORTATION_REQUESTS';
 
-    // If no field is empty, continue with the submission process
     try {
-      // Prepare the data to save
       Map<String, dynamic> requestData = {
         'user_id': widget.userId,
         'first_name': _firstNameController.text,
@@ -479,44 +480,40 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
         'service_type': serviceType,
         'status': 'pending',
         'created_at': FieldValue.serverTimestamp(),
+        'user_type': _isExternalClient ? 'external' : 'official',
       };
 
-      // Automatically generate a unique ID for each request
       await FirebaseFirestore.instance.collection(collection).add(requestData);
 
-      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'Request submitted successfully!',
             style: TextStyle(color: Colors.white),
           ),
-          backgroundColor: Colors.green,  // Green color for success
+          backgroundColor: Colors.green,
           duration: Duration(seconds: 3),
         ),
       );
 
-      // Show the Pending Approval dialog
       showDialog(
         context: context,
         builder: (context) => ApprovalDialog(),
       );
 
     } catch (e) {
-      // Show error message if saving fails
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'Failed to submit request: $e',
             style: TextStyle(color: Colors.white),
           ),
-          backgroundColor: Colors.red,  // Red color for error
+          backgroundColor: Colors.red,
           duration: Duration(seconds: 3),
         ),
       );
     }
   }
-
 
   Widget _buildTextField(String label, TextEditingController controller, String errorText) {
     return TextFormField(

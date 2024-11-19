@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-import '../client_garbageCollection_screen/client_garbage_collection_screen.dart';
+import '../client_garbage_collection_screen/client_garbage_collection_screen.dart';
 import '../client_tranportation_screen/client_transportation_screen.dart';
 
 class RequestPage extends StatelessWidget {

@@ -1,53 +1,55 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:flutter_html/flutter_html.dart' as html;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
 
-class TransportationMapScreen extends StatefulWidget {
+class GarbageMapScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
 
-  TransportationMapScreen({required this.userData});
+  GarbageMapScreen({required this.userData});
 
   @override
-  _TransportationMapScreenState createState() => _TransportationMapScreenState();
+  _GarbageMapScreenState createState() => _GarbageMapScreenState();
 }
 
-class _TransportationMapScreenState extends State<TransportationMapScreen> {
+class _GarbageMapScreenState extends State<GarbageMapScreen> {
   late GoogleMapController mapController;
+  late LatLng _center;
   Set<Marker> _markers = {};
   Set<Polyline> _polylines = {};
   LatLng? _currentPosition;
-  LatLng? _pickupLocation;
-  LatLng? _destinationLocation;
-  bool _hasArrivedAtPickup = false;
-  bool _hasArrivedAtDestination = false;
+  bool _hasArrived = false;
   StreamSubscription<Position>? _positionStream;
   MapType _mapType = MapType.normal;
   List<Step> _directions = [];
   String _estimatedArrival = '';
   bool _isNavigating = false;
-  bool _isNavigatingToPickup = true;
   String? _selfieImageUrl;
-  bool _canCompleteTrip = false;
+  bool _canCompletePickup = false;
 
   @override
   void initState() {
     super.initState();
-    _pickupLocation = LatLng(
-      widget.userData['pickup_location']['latitude'],
-      widget.userData['pickup_location']['longitude'],
+    _center = LatLng(
+      widget.userData['location']['latitude'],
+      widget.userData['location']['longitude'],
     );
-    _destinationLocation = LatLng(
-      widget.userData['destination_location']['latitude'],
-      widget.userData['destination_location']['longitude'],
+    _markers.add(
+      Marker(
+        markerId: MarkerId('user_location'),
+        position: _center,
+        infoWindow: InfoWindow(
+          title: '${widget.userData['first_name']} ${widget.userData['last_name']}',
+          snippet: widget.userData['location']['address'],
+        ),
+      ),
     );
-    _addMarkers();
     _getCurrentLocation();
     _fetchSelfieImageUrl();
   }
@@ -77,25 +79,6 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
 
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
-  }
-
-  void _addMarkers() {
-    _markers.add(
-      Marker(
-        markerId: MarkerId('pickup_location'),
-        position: _pickupLocation!,
-        infoWindow: InfoWindow(title: 'Pickup Location'),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-      ),
-    );
-    _markers.add(
-      Marker(
-        markerId: MarkerId('destination_location'),
-        position: _destinationLocation!,
-        infoWindow: InfoWindow(title: 'Destination Location'),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-      ),
-    );
   }
 
   Future<void> _getCurrentLocation() async {
@@ -148,8 +131,7 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
   Future<void> _updatePolylines() async {
     if (_currentPosition == null) return;
 
-    LatLng destination = _isNavigatingToPickup ? _pickupLocation! : _destinationLocation!;
-    _directions = await _getDirections(_currentPosition!, destination);
+    _directions = await _getDirections(_currentPosition!, _center);
 
     if (_directions.isNotEmpty) {
       _estimatedArrival = _directions.first.duration;
@@ -160,7 +142,7 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
 
     PolylineRequest request = PolylineRequest(
       origin:  PointLatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-      destination:  PointLatLng(destination.latitude, destination.longitude),
+      destination:  PointLatLng(_center.latitude, _center.longitude),
       mode: TravelMode.driving,
     );
 
@@ -231,74 +213,68 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
   void _checkArrival() {
     if (_currentPosition == null) return;
 
-    LatLng targetLocation = _isNavigatingToPickup ? _pickupLocation! : _destinationLocation!;
     double distanceInMeters = Geolocator.distanceBetween(
       _currentPosition!.latitude,
       _currentPosition!.longitude,
-      targetLocation.latitude,
-      targetLocation.longitude,
+      _center.latitude,
+      _center.longitude,
     );
 
     if (distanceInMeters < 50) {
-      if (_isNavigatingToPickup) {
-        setState(() {
-          _hasArrivedAtPickup = true;
-          _isNavigatingToPickup = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('You have arrived at the pickup location!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        _updatePolylines();
-      } else {
-        setState(() {
-          _hasArrivedAtDestination = true;
-          _isNavigating = false;
-          _canCompleteTrip = true;
-        });
-        _positionStream?.cancel();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('You have arrived at the destination!'),
-            backgroundColor: Colors.green,),
-        );
-      }
+      setState(() {
+        _hasArrived = true;
+        _isNavigating = false;
+        _canCompletePickup = true;
+      });
+      _positionStream?.cancel();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('You have arrived at the destination!'),
+          backgroundColor: Colors.green, // Green for positive messages
+        ),
+      );
     }
   }
 
-  void _changeMapType(MapType type) {
-    setState(() {
-      _mapType = type;
-    });
-  }
-
-  Future<void> _completeTrip() async {
+  Future<void> _completePickup() async {
     String? docId = widget.userData['request_id'] as String?;
     if (docId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: Request ID not found'),
-            backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Error: Request ID not found'),
+          backgroundColor: Colors.red, // Red for errors
+        ),
       );
       return;
     }
 
     FirebaseFirestore.instance
-        .collection('TRANSPORTATION_REQUESTS')
+        .collection('GARBAGE_REQUESTS')
         .doc(docId)
         .update({'status': 'completed'}).then((_) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Trip completed successfully!'),
-            backgroundColor: Colors.green),
+        SnackBar(
+          content: Text('Pickup completed successfully!'),
+          backgroundColor: Colors.green, // Green for success
+        ),
       );
       setState(() {
-        _canCompleteTrip = false;
+        _canCompletePickup = false;
       });
     }).catchError((error) {
-      print('Error completing trip: $error');
+      print('Error completing pickup: $error');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to complete trip. Please try again.'),
-            backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Failed to complete pickup. Please try again.'),
+          backgroundColor: Colors.red, // Red for errors
+        ),
       );
+    });
+  }
+
+  void _changeMapType(MapType type) {
+    setState(() {
+      _mapType = type;
     });
   }
 
@@ -310,7 +286,7 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
           GoogleMap(
             onMapCreated: _onMapCreated,
             initialCameraPosition: CameraPosition(
-              target: _pickupLocation!,
+              target: _center,
               zoom: 15.0,
             ),
             markers: _markers,
@@ -397,9 +373,10 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
                       profilePicture: _selfieImageUrl,
                     ),
                     SizedBox(height: 16),
-                    _buildInfoRow(Icons.phone, 'Contact', widget.userData['contact_number']),
-                    _buildInfoRow(Icons.location_on, 'Pickup', widget.userData['pickup_location']['address']),
-                    _buildInfoRow(Icons.location_on, 'Destination', widget.userData['destination_location']['address']),
+                    _buildInfoRow(Icons.phone, 'Contact', widget.userData['contact_number'] as String?),
+                    _buildInfoRow(Icons.location_on, 'Address', widget.userData['location']?['address'] as String?),
+                    if (widget.userData['note'] != null)
+                      _buildInfoRow(Icons.note, 'Note', widget.userData['note'] as String?),
                     SizedBox(height: 16),
                     Center(
                       child: ElevatedButton(
@@ -413,11 +390,11 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
                         ),
                       ),
                     ),
-                    if (_canCompleteTrip)
+                    if (_canCompletePickup)
                       Center(
                         child: ElevatedButton(
-                          onPressed: _completeTrip,
-                          child: Text('Complete Trip'),
+                          onPressed: _completePickup,
+                          child: Text('Complete Pickup'),
                           style: ElevatedButton.styleFrom(
                             foregroundColor: Colors.white,
                             backgroundColor: Colors.green,
@@ -450,7 +427,7 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
         SizedBox(width: 16),
         Expanded(
           child: Text(
-            '${data['first_name']} ${data['last_name']}',
+            '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}',
             style: GoogleFonts.poppins(fontSize: 18),
           ),
         ),
@@ -458,13 +435,13 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String title, String value) {
+  Widget _buildInfoRow(IconData icon, String title, String? value) {
     return Row(
       children: [
         Icon(icon, color: Colors.blue, size: 20),
         SizedBox(width: 8),
         Expanded(
-          child: Text('$title: $value', style: GoogleFonts.poppins(fontSize: 14)),
+          child: Text(value ?? 'N/A', style: GoogleFonts.poppins(fontSize: 14)),
         ),
       ],
     );

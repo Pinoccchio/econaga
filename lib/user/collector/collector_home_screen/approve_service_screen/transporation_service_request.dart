@@ -2,7 +2,6 @@ import 'package:econaga_prj/user/collector/collector_home_screen/approve_service
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'map_screen.dart'; // Import the new MapScreen
 
 class TransportationServiceRequest extends StatelessWidget {
   @override
@@ -59,6 +58,7 @@ class TransportationServiceRequest extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final request = requests[index];
                     final data = request.data() as Map<String, dynamic>;
+                    data['request_id'] = request.id; // Add this line to include the document ID
                     return _buildRequestTile(data, context);
                   },
                 );
@@ -78,11 +78,6 @@ class TransportationServiceRequest extends StatelessWidget {
     final serviceType = data['service_type'] ?? 'No service type specified';
     final note = data['note'] != null ? 'Note: ${data['note']}' : 'No additional notes';
 
-    final pickupLatitude = data['pickup_location']?['latitude'];
-    final pickupLongitude = data['pickup_location']?['longitude'];
-    final destinationLatitude = data['destination_location']?['latitude'];
-    final destinationLongitude = data['destination_location']?['longitude'];
-
     final details = 'Pickup: $pickupLocation\nDestination: $destinationLocation\nService: $serviceType\nContact: $contact\n$note';
 
     return StreamBuilder<DocumentSnapshot>(
@@ -92,15 +87,15 @@ class TransportationServiceRequest extends StatelessWidget {
           .snapshots(),
       builder: (context, userSnapshot) {
         if (userSnapshot.connectionState == ConnectionState.waiting) {
-          return _buildListTile(initials, data, details, context, null, pickupLatitude, pickupLongitude, destinationLatitude, destinationLongitude);
+          return _buildListTile(initials, data, details, context, null);
         }
 
         if (userSnapshot.hasData && userSnapshot.data!.data() != null) {
           final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-          final profilePicture = userData['profile_picture'];
-          return _buildListTile(initials, data, details, context, profilePicture, pickupLatitude, pickupLongitude, destinationLatitude, destinationLongitude);
+          final profilePicture = userData['selfieImageUrl'];
+          return _buildListTile(initials, data, details, context, profilePicture);
         } else {
-          return _buildListTile(initials, data, details, context, null, pickupLatitude, pickupLongitude, destinationLatitude, destinationLongitude);
+          return _buildListTile(initials, data, details, context, null);
         }
       },
     );
@@ -112,10 +107,6 @@ class TransportationServiceRequest extends StatelessWidget {
       String details,
       BuildContext context,
       String? profilePicture,
-      double? pickupLatitude,
-      double? pickupLongitude,
-      double? destinationLatitude,
-      double? destinationLongitude,
       ) {
     return ListTile(
       leading: CircleAvatar(
@@ -149,14 +140,13 @@ class TransportationServiceRequest extends StatelessWidget {
           if (value == 'Details') {
             _showDetailsDialog(context, data, profilePicture);
           } else if (value == 'Visit') {
-            // Pass pickup and destination coordinates to MapScreen
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => TransportationMapScreen(userData: data),
               ),
             );
-        }
+          }
         },
         itemBuilder: (BuildContext context) {
           return [

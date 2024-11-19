@@ -12,7 +12,6 @@ import 'package:google_places_flutter/model/prediction.dart';
 import '../../../designs/app_colors.dart';
 import 'approval_dialog.dart';
 
-
 class ClientGarbageCollectionScreen extends StatefulWidget {
   final String userId;
 
@@ -44,6 +43,8 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
   String _contactNumber = '';
   String _note = '';
 
+  bool _isExternalClient = false; // New variable for user type
+
   @override
   void initState() {
     super.initState();
@@ -70,7 +71,7 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
       print('Fetching user data for userId: ${widget.userId}');
       DocumentSnapshot doc = await FirebaseFirestore.instance
           .collection('USERS_ACCOUNTS')
-          .doc(widget.userId) // Access document by userId
+          .doc(widget.userId)
           .get();
 
       if (doc.exists) {
@@ -80,7 +81,6 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
           _email = doc['email'] ?? '';
           _contactNumber = doc['phone_number'] ?? '';
 
-          // Update controllers with fetched data
           _firstNameController.text = _firstName;
           _lastNameController.text = _lastName;
           _emailController.text = _email;
@@ -213,6 +213,20 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
               ),
             ),
             SizedBox(height: 16),
+            Row(
+              children: [
+                Text('External Client', style: GoogleFonts.poppins()),
+                Switch(
+                  value: _isExternalClient,
+                  onChanged: (value) {
+                    setState(() {
+                      _isExternalClient = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+            SizedBox(height: 12),
             _buildTextField('First Name', _firstNameController, 'Please enter your first name'),
             SizedBox(height: 12),
             _buildTextField('Last Name', _lastNameController, 'Please enter your last name'),
@@ -243,7 +257,7 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
           ],
           onChanged: (MapType? type) {
             setState(() {
-              _selectedMapType = type ?? MapType.normal;
+              _selectedMapType = type ?? MapType.hybrid;
             });
           },
         ),
@@ -271,7 +285,7 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
             SizedBox(height: 8),
             GooglePlaceAutoCompleteTextField(
               textEditingController: _searchController,
-              googleAPIKey: "YOUR_GOOGLE_API_KEY",
+              googleAPIKey: "AIzaSyD4UAtE_r8JjBbd0o5qfv3ZSPX_8xkNJ7c",
               inputDecoration: InputDecoration(
                 hintText: "Search for a location",
                 border: OutlineInputBorder(),
@@ -378,7 +392,7 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _submitGarbageCollectionRequest,  // Call the submit function
+        onPressed: _submitGarbageCollectionRequest,
         child: Text(
           'Submit Request',
           style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold),
@@ -394,24 +408,21 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
   }
 
   void _submitGarbageCollectionRequest() async {
-    // Check if any of the required fields are empty
     if (_firstNameController.text.isEmpty ||
         _lastNameController.text.isEmpty ||
         _emailController.text.isEmpty ||
         _contactNumberController.text.isEmpty) {
-
-      // Show red SnackBar for error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'Please fill in all required fields.',
             style: TextStyle(color: Colors.white),
           ),
-          backgroundColor: Colors.red,  // Red color for the error
+          backgroundColor: Colors.red,
           duration: Duration(seconds: 3),
         ),
       );
-      return;  // Stop further execution
+      return;
     }
 
     if (_markers.isEmpty) {
@@ -421,16 +432,14 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
             'Please select a location on the map.',
             style: TextStyle(color: Colors.white),
           ),
-          backgroundColor: Colors.red,  // Red color for the error
+          backgroundColor: Colors.red,
           duration: Duration(seconds: 3),
         ),
       );
-      return;  // Stop further execution
+      return;
     }
 
-    // If no field is empty, continue with the submission process
     try {
-      // Prepare the data to save
       Map<String, dynamic> requestData = {
         'user_id': widget.userId,
         'first_name': _firstNameController.text,
@@ -442,45 +451,41 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
           'longitude': _markers.first.position.longitude,
           'address': _address,
         },
-        'note': _note.isNotEmpty ? _note : null,  // Note is optional
+        'note': _note.isNotEmpty ? _note : null,
         'status': 'pending',
         'created_at': FieldValue.serverTimestamp(),
+        'user_type': _isExternalClient ? 'external' : 'official', // New field for user type
       };
 
-      // Automatically generate a unique ID for each request
       await FirebaseFirestore.instance.collection('GARBAGE_REQUESTS').add(requestData);
 
-      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'Request submitted successfully!',
             style: TextStyle(color: Colors.white),
           ),
-          backgroundColor: Colors.green,  // Green color for success
+          backgroundColor: Colors.green,
           duration: Duration(seconds: 3),
         ),
       );
 
-      // Show the Pending Approval dialog
       showDialog(
         context: context,
         builder: (context) => ApprovalDialog(),
       );
 
     } catch (e) {
-      // Show error message if saving fails
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to submit request. Please try again.'),
-          backgroundColor: Colors.red,  // Red color for the error
+          backgroundColor: Colors.red,
           duration: Duration(seconds: 3),
         ),
       );
       print('Error submitting request: $e');
     }
   }
-
 
   Widget _buildTextField(String label, TextEditingController controller, String errorText) {
     return TextFormField(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'map_screen.dart'; // Import the new MapScreen
+import 'garbage_map_screen.dart';
 
 class GarbageServiceRequest extends StatelessWidget {
   @override
@@ -58,6 +58,8 @@ class GarbageServiceRequest extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final request = requests[index];
                     final data = request.data() as Map<String, dynamic>;
+                    // Add the document ID to the data
+                    data['request_id'] = request.id;
                     return _buildRequestTile(data, context);
                   },
                 );
@@ -87,7 +89,7 @@ class GarbageServiceRequest extends StatelessWidget {
 
         if (userSnapshot.hasData && userSnapshot.data!.data() != null) {
           final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-          final profilePicture = userData['profile_picture'];
+          final profilePicture = userData['selfieImageUrl'];
           return _buildListTile(initials, data, details, context, profilePicture);
         } else {
           return _buildListTile(initials, data, details, context, null);
@@ -132,7 +134,7 @@ class GarbageServiceRequest extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => MapScreen(userData: data),
+                builder: (context) => GarbageMapScreen(userData: data),
               ),
             );
           }

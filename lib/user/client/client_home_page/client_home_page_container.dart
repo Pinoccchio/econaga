@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'AccountPage.dart';
-import 'NotificationPage.dart';
+import 'notifications_page.dart';
 import 'RequestPage.dart';
 import 'client_home_page.dart';
 import 'complaints_page/ComplaintsPage.dart';
@@ -25,7 +25,7 @@ class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
     super.initState();
     _pages.addAll([
       RequestPage(userId: widget.userId), // Pass userId to RequestPage
-      NotificationPage(),
+      NotificationPage(userId: widget.userId),
       ClientHomePage(onRequestNow: _navigateToRequestPage, userId: widget.userId),
       ComplaintsPage(userId: widget.userId),
       AccountPage(userId: widget.userId), // Pass userId to AccountPage
