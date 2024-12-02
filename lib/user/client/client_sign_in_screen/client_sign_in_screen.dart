@@ -75,11 +75,12 @@ class _ClientSignInScreenState extends State<ClientSignInScreen> {
                   textColor: Colors.white,
                 );
 
-                Navigator.pushReplacement(
+                Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(
                     builder: (context) => ClientHomeScreenContainer(userId: user.uid),
                   ),
+                      (Route<dynamic> route) => false, // Clears the navigation stack
                 );
               } else {
                 Fluttertoast.showToast(

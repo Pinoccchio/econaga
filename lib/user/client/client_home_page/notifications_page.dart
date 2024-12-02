@@ -12,58 +12,97 @@ class NotificationPage extends StatefulWidget {
   _NotificationPageState createState() => _NotificationPageState();
 }
 
-class _NotificationPageState extends State<NotificationPage> {
-  late Stream<List<Map<String, dynamic>>> _requestsStream;
+class _NotificationPageState extends State<NotificationPage>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  final _pendingSubject = BehaviorSubject<List<Map<String, dynamic>>>();
+  final _approvedSubject = BehaviorSubject<List<Map<String, dynamic>>>();
+  final _declinedSubject = BehaviorSubject<List<Map<String, dynamic>>>();
+  final _completedSubject = BehaviorSubject<List<Map<String, dynamic>>>();
 
   @override
   void initState() {
     super.initState();
-    _requestsStream = _listenToRequests();
+    _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(_handleTabChange);
+    _listenToRequests('pending', _pendingSubject);
+    _listenToRequests('approved', _approvedSubject);
+    _listenToRequests('declined', _declinedSubject);
+    _listenToRequests('completed', _completedSubject);
   }
 
-  Stream<List<Map<String, dynamic>>> _listenToRequests() {
-    final garbageStream = FirebaseFirestore.instance
-        .collection('GARBAGE_REQUESTS')
+  void _handleTabChange() {
+    if (_tabController.indexIsChanging) {
+      switch (_tabController.index) {
+        case 0:
+          _listenToRequests('pending', _pendingSubject);
+          break;
+        case 1:
+          _listenToRequests('approved', _approvedSubject);
+          break;
+        case 2:
+          _listenToRequests('declined', _declinedSubject);
+          break;
+        case 3:
+          _listenToRequests('completed', _completedSubject);
+          break;
+      }
+    }
+  }
+
+  void _listenToRequests(String status, BehaviorSubject<List<Map<String, dynamic>>> subject) {
+    FirebaseFirestore.instance
+        .collectionGroup('GARBAGE_REQUESTS')
         .where('user_id', isEqualTo: widget.userId)
+        .where('status', isEqualTo: status)
         .snapshots()
         .map((snapshot) => snapshot.docs
         .map((doc) => {'type': 'Garbage Collection', ...doc.data()})
-        .toList());
+        .toList())
+        .listen((data) {
+      subject.add(data);
+    });
 
-    final burialStream = FirebaseFirestore.instance
-        .collection('BURIAL_REQUESTS')
+    FirebaseFirestore.instance
+        .collectionGroup('BURIAL_REQUESTS')
         .where('user_id', isEqualTo: widget.userId)
+        .where('status', isEqualTo: status)
         .snapshots()
         .map((snapshot) => snapshot.docs
         .map((doc) => {'type': 'Burial Service', ...doc.data()})
-        .toList());
+        .toList())
+        .listen((data) {
+      subject.add([...?subject.value, ...data]);
+    });
 
-    final transportationStream = FirebaseFirestore.instance
-        .collection('TRANSPORTATION_REQUESTS')
+    FirebaseFirestore.instance
+        .collectionGroup('TRANSPORTATION_REQUESTS')
         .where('user_id', isEqualTo: widget.userId)
+        .where('status', isEqualTo: status)
         .snapshots()
         .map((snapshot) => snapshot.docs
         .map((doc) => {'type': 'Lipat Bahay Service', ...doc.data()})
-        .toList());
-
-    // Combine all three streams into one
-    return Rx.combineLatest3<List<Map<String, dynamic>>, List<Map<String, dynamic>>, List<Map<String, dynamic>>, List<Map<String, dynamic>>>(
-      garbageStream,
-      burialStream,
-      transportationStream,
-          (garbage, burial, transportation) => [
-        ...garbage,
-        ...burial,
-        ...transportation,
-      ]..sort((a, b) => b['created_at'].compareTo(a['created_at'])),
-    );
+        .toList())
+        .listen((data) {
+      subject.add([...?subject.value, ...data]);
+    });
   }
 
-
   Future<void> _refreshData() async {
-    setState(() {
-      _requestsStream = _listenToRequests();
-    });
+    final currentStatus = ['pending', 'approved', 'declined', 'completed'][_tabController.index];
+    final currentSubject = [_pendingSubject, _approvedSubject, _declinedSubject, _completedSubject][_tabController.index];
+    _listenToRequests(currentStatus, currentSubject);
+  }
+
+  @override
+  void dispose() {
+    _tabController.removeListener(_handleTabChange);
+    _tabController.dispose();
+    _pendingSubject.close();
+    _approvedSubject.close();
+    _declinedSubject.close();
+    _completedSubject.close();
+    super.dispose();
   }
 
   @override
@@ -73,28 +112,81 @@ class _NotificationPageState extends State<NotificationPage> {
         title: Text('My Requests', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.green.shade600,
         elevation: 4,
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: [
+            _buildTab('Pending', _pendingSubject, Colors.yellow),
+            _buildTab('Approved', _approvedSubject, Colors.blue),
+            _buildTab('Declined', _declinedSubject, Colors.red),
+            _buildTab('Complete', _completedSubject, Colors.green),
+          ],
+        ),
       ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _requestsStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('No requests found'));
-          }
-          return RefreshIndicator(
-            onRefresh: _refreshData,
-            child: ListView.builder(
-              itemCount: snapshot.data!.length,
-              itemBuilder: (context, index) {
-                final request = snapshot.data![index];
-                return _buildRequestCard(request);
-              },
-            ),
-          );
-        },
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildRequestStream(_pendingSubject),
+          _buildRequestStream(_approvedSubject),
+          _buildRequestStream(_declinedSubject),
+          _buildRequestStream(_completedSubject),
+        ],
       ),
+    );
+  }
+
+  Widget _buildTab(String title, BehaviorSubject<List<Map<String, dynamic>>> subject, Color color) {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: subject,
+      builder: (context, snapshot) {
+        int count = snapshot.data?.length ?? 0;
+        return Tab(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Text(title),
+              Positioned(
+                right: 8,
+                top: 0,
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRequestStream(BehaviorSubject<List<Map<String, dynamic>>> subject) {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: subject,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(child: Text('No requests found'));
+        }
+        return RefreshIndicator(
+          onRefresh: _refreshData,
+          child: ListView.builder(
+            itemCount: snapshot.data!.length,
+            itemBuilder: (context, index) {
+              final request = snapshot.data![index];
+              return _buildRequestCard(request);
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -105,10 +197,13 @@ class _NotificationPageState extends State<NotificationPage> {
         statusColor = Colors.yellow;
         break;
       case 'approved':
-        statusColor = Colors.green;
+        statusColor = Colors.blue;
         break;
       case 'declined':
         statusColor = Colors.red;
+        break;
+      case 'completed':
+        statusColor = Colors.green;
         break;
       default:
         statusColor = Colors.grey;
@@ -147,7 +242,7 @@ class _NotificationPageState extends State<NotificationPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 5,
         child: Padding(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -156,55 +251,73 @@ class _NotificationPageState extends State<NotificationPage> {
                 Row(
                   children: [
                     Icon(Icons.assignment, color: Colors.green.shade800, size: 28),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Text(
                       request['type'],
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green.shade800),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade800,
+                      ),
                     ),
                   ],
                 ),
-                SizedBox(height: 8),
-                Divider(),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
+                const Divider(),
+                const SizedBox(height: 8),
                 Card(
                   color: Colors.green.shade50,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Padding(
-                    padding: EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
                             Icon(Icons.info_outline, color: Colors.green.shade700),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             Text(
                               'Status: ${request['status']}',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Row(
                           children: [
                             Icon(Icons.date_range, color: Colors.green.shade700),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             Text(
                               'Date: ${DateFormat('MM/dd/yyyy').format((request['created_at'] as Timestamp).toDate())}',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         if (request.containsKey('note'))
                           Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(Icons.note, color: Colors.green.shade700),
-                              SizedBox(width: 8),
-                              Text(
-                                'Note: ${request['note']}',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                              Icon(Icons.notes, color: Colors.green.shade700),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  'Note: ${request['note']}',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
@@ -212,98 +325,18 @@ class _NotificationPageState extends State<NotificationPage> {
                     ),
                   ),
                 ),
-                SizedBox(height: 12),
-                Card(
-                  color: Colors.green.shade50,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Details:',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade800),
-                        ),
-                        SizedBox(height: 8),
-                        if (request['type'] == 'Garbage Collection')
-                          Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(text: 'Address: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                                TextSpan(text: request['location']['address']),
-                              ],
-                            ),
-                            style: TextStyle(fontSize: 16),
-                          )
-                        else if (request['type'] == 'Burial Service' || request['type'] == 'Lipat Bahay Service')
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text.rich(
-                                TextSpan(
-                                  children: [
-                                    TextSpan(text: 'Pickup: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                                    TextSpan(text: request['pickup_location']['address']),
-                                  ],
-                                ),
-                                style: TextStyle(fontSize: 16),
-                              ),
-                              Text.rich(
-                                TextSpan(
-                                  children: [
-                                    TextSpan(text: 'Destination: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                                    TextSpan(text: request['destination_location']['address']),
-                                  ],
-                                ),
-                                style: TextStyle(fontSize: 16),
-                              ),
-                            ],
-                          ),
-                        if (request.containsKey('first_name') && request.containsKey('last_name'))
-                          Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(text: 'Name: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                                TextSpan(text: '${request['first_name']} ${request['last_name']}'),
-                              ],
-                            ),
-                            style: TextStyle(fontSize: 16),
-                          ),
-                        if (request.containsKey('contact_number'))
-                          Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(text: 'Contact Number: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                                TextSpan(text: request['contact_number']),
-                              ],
-                            ),
-                            style: TextStyle(fontSize: 16),
-                          ),
-                        if (request.containsKey('email'))
-                          Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(text: 'Email: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                                TextSpan(text: request['email']),
-                              ],
-                            ),
-                            style: TextStyle(fontSize: 16),
-                          ),
-                        if (request.containsKey('user_type'))
-                          Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(text: 'User Type: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                                TextSpan(text: request['user_type']),
-                              ],
-                            ),
-                            style: TextStyle(fontSize: 16),
-                          ),
-                      ],
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.green.shade700,
+                      ),
+                      child: const Text('Close'),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),

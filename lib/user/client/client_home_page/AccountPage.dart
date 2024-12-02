@@ -13,6 +13,8 @@ import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
 
+import '../../login_as_screen/login_as_screen.dart';
+
 class AccountPage extends StatefulWidget {
   final String userId;
 
@@ -303,7 +305,12 @@ class _AccountPageState extends State<AccountPage> {
                     textColor: Colors.white,
                     fontSize: 16.0,
                   );
-                  SystemNavigator.pop();
+
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => LoginAsScreen()),
+                        (Route<dynamic> route) => false, // Clear all previous routes
+                  );
                 },
                 child: Text(
                   'SIGN OUT',

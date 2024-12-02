@@ -1,3 +1,4 @@
+import 'package:econaga_prj/admin/home_page/truck_monitoring_page.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,6 +10,7 @@ import '../requests_page/admin_garbage_collection_request.dart';
 import '../requests_page/admin_lipat_bahay_service.dart';
 import 'admin_dashboard.dart';
 import 'admin_sign_in_page.dart';
+import 'collector_driving_monitoring_page.dart';
 
 class AdminHomePage extends StatefulWidget {
   final String userId;
@@ -133,11 +135,18 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     title: Text('Request'),
                     children: [
                       _buildListTile('Garbage Collection', null, 'GarbageCollection'),
-                      _buildListTile('Burial Service', null, 'BurialService'), // Added Burial Service
+                      _buildListTile('Burial Service', null, 'BurialService'),
                       _buildListTile('Lipat Bahay', null, 'LipatBahay'),
                     ],
                   ),
-                  _buildListTile('Monitoring', Icons.monitor, 'Monitoring'),
+                  ExpansionTile(
+                    leading: Icon(Icons.monitor, color: Colors.green),
+                    title: Text('Monitoring'),
+                    children: [
+                      _buildListTile('Collector/Driver Monitoring', null, 'CollectorDriverMonitoring'),
+                      _buildListTile('Truck Monitoring', null, 'TruckMonitoring'),
+                    ],
+                  ),
                   _buildListTile('Complaints', Icons.comment, 'Complaints'),
                   _buildListTile('Account', Icons.account_circle, 'Account'),
                   Divider(),
@@ -156,7 +165,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 ? AdminLipatBahayServiceRequest()
                 : _currentPage == 'Complaints'
                 ? ComplaintsOverview()
-                : _currentPage == 'Account' // Navigate to AdminAccountPage when 'Account' is clicked
+                : _currentPage == 'CollectorDriverMonitoring'
+                ? CollectorDriverMonitoringPage()
+                : _currentPage == 'TruckMonitoring'
+                ? TruckMonitoringPage() // Add this case for the new page
+                : _currentPage == 'Account'
                 ? AdminAccountPage()
                 : Center(child: Text('Content for $_currentPage')),
           ),

@@ -16,6 +16,8 @@ import 'package:geocoding/geocoding.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
 
+import '../../login_as_screen/login_as_screen.dart';
+
 class ProfileScreen extends StatefulWidget {
   final String userId;
 
@@ -33,6 +35,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   TextEditingController _searchController = TextEditingController();
   LatLng? _selectedLocation;
   LatLng? _currentLocation;
+  bool isTruckToggle = false; // Track whether to show truck or driver availability
+  String? selectedAvailability; // Track the selected availability
 
   // TODO: Replace with your actual Google Places API key
   static const String kGoogleApiKey = "AIzaSyD4UAtE_r8JjBbd0o5qfv3ZSPX_8xkNJ7c";
@@ -130,6 +134,130 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildProfileInfo(Map<String, dynamic> userData) {
+    return Column(
+      children: [
+        _buildAvailabilityToggle(userData),
+        SizedBox(height: 24),
+        _buildProfileField(Icons.email, 'Email', userData['email'] ?? 'N/A'),
+        _buildProfileField(Icons.phone, 'Mobile Number', userData['phone_number'] ?? 'N/A'),
+        _buildProfileField(Icons.cake, 'Date of Birth', userData['date_of_birth'] ?? 'N/A'),
+        _buildProfileField(Icons.local_shipping, 'Truck Number', userData['truck_number'] ?? 'N/A'),
+        _buildProfileField(Icons.location_on, 'Collection Zone', userData['collection_zone'] ?? 'N/A'),
+        _buildProfileField(Icons.access_time, 'Created At', _formatTimestamp(userData['createdAt'])),
+        _buildProfileField(Icons.verified_user, 'Status', userData['status'] ?? 'N/A'),
+      ],
+    );
+  }
+
+  Widget _buildAvailabilityToggle(Map<String, dynamic> userData) {
+    return Card(
+      elevation: 4,
+      margin: EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Select Availability Type',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+                fontSize: 18,
+              ),
+            ),
+            SizedBox(height: 16),
+            // Availability Type Toggle
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: DropdownButton<bool>(
+                    isExpanded: true,
+                    value: isTruckToggle,
+                    onChanged: (newValue) {
+                      setState(() {
+                        isTruckToggle = newValue!;
+                        selectedAvailability = null; // Reset the selected availability on toggle change
+                      });
+                    },
+                    items: [
+                      DropdownMenuItem<bool>(
+                        value: false,
+                        child: Text('Driver Availability'),
+                      ),
+                      DropdownMenuItem<bool>(
+                        value: true,
+                        child: Text('Truck Availability'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            // Availability Status Dropdown
+            DropdownButton<String>(
+              isExpanded: true,
+              value: selectedAvailability ?? (isTruckToggle
+                  ? (userData['truck_availability'] ?? 'For Repair')
+                  : (userData['availability'] ?? 'Not Available')),
+              onChanged: (newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    selectedAvailability = newValue;
+                  });
+                  _updateAvailability(newValue, isTruckToggle);
+                }
+              },
+              items: <String>['Available', 'Used', isTruckToggle ? 'For Repair' : 'Not Available']
+                  .map<DropdownMenuItem<String>>((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      color: value == 'Available'
+                          ? Colors.green
+                          : value == 'Used'
+                          ? Colors.red
+                          : Colors.black,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateAvailability(String availability, bool isTruck) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('USERS_ACCOUNTS')
+          .doc(widget.userId)
+          .update({
+        isTruck ? 'truck_availability' : 'availability': availability
+      });
+
+      Fluttertoast.showToast(
+        msg: "${isTruck ? 'Truck' : 'Driver'} availability updated successfully!",
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to update availability: $e",
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
+  }
+
   Widget _buildProfileHeader(BuildContext context, Map<String, dynamic> userData) {
     return Column(
       children: [
@@ -175,19 +303,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildProfileInfo(Map<String, dynamic> userData) {
-    return Column(
-      children: [
-        _buildProfileField(Icons.email, 'Email', userData['email'] ?? 'N/A'),
-        _buildProfileField(Icons.phone, 'Mobile Number', userData['phone_number'] ?? 'N/A'),
-        _buildProfileField(Icons.cake, 'Date of Birth', userData['date_of_birth'] ?? 'N/A'),
-        _buildProfileField(Icons.local_shipping, 'Truck Number', userData['truck_number'] ?? 'N/A'),
-        _buildProfileField(Icons.location_on, 'Collection Zone', userData['collection_zone'] ?? 'N/A'),
-        _buildProfileField(Icons.access_time, 'Created At', _formatTimestamp(userData['createdAt'])),
-        _buildProfileField(Icons.verified_user, 'Status', userData['status'] ?? 'N/A'),
-      ],
-    );
-  }
+
 
   String _formatTimestamp(Timestamp? timestamp) {
     if (timestamp == null) return 'N/A';
@@ -323,7 +439,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     textColor: Colors.white,
                     fontSize: 16.0,
                   );
-                  SystemNavigator.pop();
+
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => LoginAsScreen()),
+                        (Route<dynamic> route) => false, // Clear all previous routes
+                  );
                 },
                 child: Text(
                   'SIGN OUT',

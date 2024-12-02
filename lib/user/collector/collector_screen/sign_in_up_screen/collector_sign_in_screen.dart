@@ -58,11 +58,12 @@ class _CollectorSignInScreenState extends State<CollectorSignInScreen> {
                 textColor: Colors.white,
               );
 
-              Navigator.pushReplacement(
+              Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(
                   builder: (context) => CollectorContainer(userId: user.uid),
                 ),
+                    (Route<dynamic> route) => false, // Clears the navigation stack
               );
             } else {
               Fluttertoast.showToast(

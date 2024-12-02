@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'approve_service_screen/garbage_service_request.dart';
+import 'completed_collections_viewer.dart';
+
 class CollectorHomePage extends StatelessWidget {
   final String userId;
 
@@ -22,9 +25,9 @@ class CollectorHomePage extends StatelessWidget {
                 SizedBox(height: 16),
                 _buildMainBanner(),
                 SizedBox(height: 16),
-                _buildStatisticsRow(),
+                _buildStatisticsRow(context),
                 SizedBox(height: 16),
-                _buildManageCollectionSection(),
+                _buildManageCollectionSection(context),
               ],
             ),
           ),
@@ -155,27 +158,90 @@ class CollectorHomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildStatisticsRow() {
+  Widget _buildStatisticsRow(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: _buildStatCardWithBackground(
-            '5',
-            'Approved Garbage\nCollection Request',
-            'lib/components/assets/images/trashcan-collector.png',
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('GARBAGE_REQUESTS')
+                .where('status', isEqualTo: 'approved')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return _buildStatCardWithBackground(
+                  '...',
+                  'Approved Garbage\nCollection Request',
+                  'lib/components/assets/images/trashcan-collector.png',
+                );
+              }
+              if (snapshot.hasError) {
+                return _buildStatCardWithBackground(
+                  'Error',
+                  'Approved Garbage\nCollection Request',
+                  'lib/components/assets/images/trashcan-collector.png',
+                );
+              }
+              int approvedCount = snapshot.data?.docs.length ?? 0;
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => GarbageServiceRequest()),
+                  );
+                },
+                child: _buildStatCardWithBackground(
+                  approvedCount.toString(),
+                  'Approved Garbage\nCollection Request',
+                  'lib/components/assets/images/trashcan-collector.png',
+                ),
+              );
+            },
           ),
         ),
         SizedBox(width: 16),
         Expanded(
-          child: _buildStatCardWithBackground(
-            '3',
-            'Completed Collections',
-            'lib/components/assets/images/trashcan-collector2.png',
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('GARBAGE_REQUESTS')
+                .where('status', isEqualTo: 'completed')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return _buildStatCardWithBackground(
+                  '...',
+                  'Completed\nCollections',
+                  'lib/components/assets/images/trashcan-collector2.png',
+                );
+              }
+              if (snapshot.hasError) {
+                return _buildStatCardWithBackground(
+                  'Error',
+                  'Completed\nCollections',
+                  'lib/components/assets/images/trashcan-collector2.png',
+                );
+              }
+              int completedCount = snapshot.data?.docs.length ?? 0;
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => CompletedCollectionsViewer()),
+                  );
+                },
+                child: _buildStatCardWithBackground(
+                  completedCount.toString(),
+                  'Completed\nCollections',
+                  'lib/components/assets/images/trashcan-collector2.png',
+                ),
+              );
+            },
           ),
         ),
       ],
     );
   }
+
 
   Widget _buildStatCardWithBackground(String number, String label, String backgroundImagePath) {
     return Container(
@@ -215,7 +281,7 @@ class CollectorHomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildManageCollectionSection() {
+  Widget _buildManageCollectionSection(BuildContext context) {
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -243,11 +309,14 @@ class CollectorHomePage extends StatelessWidget {
           SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: () {
-              // Handle button press
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => GarbageServiceRequest()),
+              );
             },
             icon: Icon(Icons.visibility),
             label: Text(
-              'View Approve Requests',
+              'View Approved Requests',
               style: GoogleFonts.poppins(),
             ),
             style: ElevatedButton.styleFrom(
