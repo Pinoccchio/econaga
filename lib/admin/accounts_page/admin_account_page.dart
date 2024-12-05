@@ -118,12 +118,14 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
               SizedBox(height: 10),
               _buildRoleDropdown(),
               SizedBox(height: 10),
-              _buildTextField(truckNumberController, 'Truck Number', icon: Icons.local_shipping),
-              SizedBox(height: 10),
-              _buildLocationSelector(),
-              SizedBox(height: 10),
-              _buildTextField(addressController, "Collection Zone", icon: Icons.location_on, readOnly: true),
-              SizedBox(height: 10),
+              if (selectedRole == 'collector') ...[
+                _buildTextField(truckNumberController, 'Truck Number', icon: Icons.local_shipping),
+                SizedBox(height: 10),
+                _buildLocationSelector(),
+                SizedBox(height: 10),
+                _buildTextField(addressController, "Collection Zone", icon: Icons.location_on, readOnly: true),
+                SizedBox(height: 10),
+              ],
               _buildImageUploadSection(),
               SizedBox(height: 20),
               Center(
@@ -292,7 +294,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
   }
 
   Widget _buildRoleDropdown() {
-    return TextFormField(
+    return DropdownButtonFormField<String>(
       decoration: InputDecoration(
         labelText: 'Role',
         prefixIcon: Icon(Icons.work, color: Colors.green.shade700),
@@ -301,11 +303,18 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
         filled: true,
         fillColor: Colors.white,
       ),
-      initialValue: 'Collector',
-      readOnly: true,
-      onSaved: (value) {
-        selectedRole = 'collector';
+      value: selectedRole,
+      onChanged: (String? newValue) {
+        setState(() {
+          selectedRole = newValue!;
+        });
       },
+      items: <String>['collector', 'client'].map<DropdownMenuItem<String>>((String value) {
+        return DropdownMenuItem<String>(
+          value: value,
+          child: Text(value.capitalize()),
+        );
+      }).toList(),
     );
   }
 
@@ -443,7 +452,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
         return;
       }
 
-      _formKey.currentState!.save(); // This will trigger the onSaved callbacks
+      _formKey.currentState!.save();
 
       if (!mounted) return;
       setState(() {
@@ -453,44 +462,49 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
       try {
         UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: emailController.text.trim(),
-          password:  passwordController.text.trim(),
+          password: passwordController.text.trim(),
         );
 
         String? idImageUrl;
         String? selfieImageUrl;
 
         if (idImage != null) {
-          idImageUrl = await _uploadImageToFirebase(idImage!, 'collectors/${userCredential.user!.uid}/id_image');
+          idImageUrl = await _uploadImageToFirebase(idImage!, '${selectedRole}s/${userCredential.user!.uid}/id_image');
         }
 
         if (selfieImage != null) {
-          selfieImageUrl = await _uploadImageToFirebase(selfieImage!, 'collectors/${userCredential.user!.uid}/selfie_image');
+          selfieImageUrl = await _uploadImageToFirebase(selfieImage!, '${selectedRole}s/${userCredential.user!.uid}/selfie_image');
         }
 
-        await FirebaseFirestore.instance.collection('USERS_ACCOUNTS').doc(userCredential.user!.uid).set({
+        Map<String, dynamic> userData = {
           'first_name': firstNameController.text.trim(),
           'middle_name': middleNameController.text.trim(),
           'last_name': lastNameController.text.trim(),
           'email': emailController.text.trim(),
           'phone_number': phoneNumberController.text.trim(),
           'date_of_birth': dateOfBirthController.text.trim(),
-          'truck_number': truckNumberController.text.trim(),
-          'idType': selectedIdType,
-          'role': 'collector', // Always set to 'collector'
-          'location': selectedLocation != null
-              ? GeoPoint(selectedLocation!.latitude, selectedLocation!.longitude)
-              : null,
-          'collection_zone': addressController.text.trim(),
+          'id_type': selectedIdType,
+          'role': selectedRole,
           'idImageUrl': idImageUrl,
           'selfieImageUrl': selfieImageUrl,
           'createdAt': FieldValue.serverTimestamp(),
           'status': 'active',
-        });
+        };
+
+        if (selectedRole == 'collector') {
+          userData['truck_number'] = truckNumberController.text.trim();
+          userData['location'] = selectedLocation != null
+              ? GeoPoint(selectedLocation!.latitude, selectedLocation!.longitude)
+              : null;
+          userData['collection_zone'] = addressController.text.trim();
+        }
+
+        await FirebaseFirestore.instance.collection('USERS_ACCOUNTS').doc(userCredential.user!.uid).set(userData);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Collector account created successfully'),
+              content: Text('${selectedRole.capitalize()} account created successfully'),
               backgroundColor: Colors.green.shade600,
               duration: Duration(seconds: 3),
               action: SnackBarAction(
@@ -605,7 +619,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
                 title: Text('${accountData['first_name']} ${accountData['last_name']}',
                   style: TextStyle(color: accountData['status'] == 'inactive' ? Colors.red.shade700 : Colors.green.shade700),
                 ),
-                subtitle: Text(accountData['email']),
+                subtitle: Text('${accountData['email']} (${accountData['role'].toString().capitalize()})'),
                 trailing: Icon(Icons.chevron_right,
                     color: accountData['status'] == 'inactive' ? Colors.red.shade700 : Colors.green.shade700
                 ),
@@ -622,61 +636,147 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Account Details', style: TextStyle(color: Colors.green.shade700)),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                _buildDetailRow('Name', '${accountData['first_name']} ${accountData['middle_name']} ${accountData['last_name']}'),
-                _buildDetailRow('Email', accountData['email']),
-                _buildDetailRow('Phone', accountData['phone_number']),
-                _buildDetailRow('Date of Birth', accountData['date_of_birth']),
-                _buildDetailRow('ID Type', accountData['idType']),
-                _buildDetailRow('Role', accountData['role']),
-                _buildDetailRow('Truck Number', accountData['truck_number']),
-                _buildDetailRow('Collection Zone', accountData['collection_zone']),
-                _buildDetailRow('Status', accountData['status'] ?? 'Active'),
-                SizedBox(height: 20),
-                if (accountData['idImageUrl'] != null)
-                  Image.network(accountData['idImageUrl'], height: 100, width: 100, fit: BoxFit.cover),
-                SizedBox(height: 10),
-                if (accountData['selfieImageUrl'] != null)
-                  Image.network(accountData['selfieImageUrl'], height: 100, width: 100, fit: BoxFit.cover),
-              ],
-            ),
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-          actions: <Widget>[
-            TextButton(
-              child: Text('Close', style: TextStyle(color: Colors.white)),
-              style: TextButton.styleFrom(backgroundColor: Colors.green.shade600),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: Text(accountData['status'] == 'inactive' ? 'Activate' : 'Deactivate', style: TextStyle(color: Colors.white)),
-              style: TextButton.styleFrom(backgroundColor: Colors.green.shade600),
-              onPressed: () {
-                _toggleAccountStatus(accountId, accountData['status'] ?? 'active');
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: Text('Reset Password', style: TextStyle(color: Colors.white)),
-              style: TextButton.styleFrom(backgroundColor: Colors.blue.shade600),
-              onPressed: () {
-                _showPasswordResetOptions(accountId, accountData['email']);
-              },
-            ),
-            TextButton(
-              child: Text('Delete', style: TextStyle(color: Colors.red)),
-              onPressed: () {
-                _deleteAccount(accountId);
-              },
-            ),
-          ],
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: contentBox(context, accountId, accountData),
         );
       },
+    );
+  }
+
+  Widget contentBox(BuildContext context, String accountId, Map<String, dynamic> accountData) {
+    return Stack(
+      children: <Widget>[
+        Container(
+          padding: EdgeInsets.only(left: 20, top: 65, right: 20, bottom: 20),
+          margin: EdgeInsets.only(top: 45),
+          decoration: BoxDecoration(
+              shape: BoxShape.rectangle,
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(color: Colors.black,offset: Offset(0,10),
+                    blurRadius: 10
+                ),
+              ]
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                'Account Details',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+              ),
+              SizedBox(height: 15,),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildDetailRow('Name', '${accountData['first_name']} ${accountData['middle_name']} ${accountData['last_name']}'),
+                      _buildDetailRow('Email', accountData['email']),
+                      _buildDetailRow('Phone', accountData['phone_number']),
+                      _buildDetailRow('Date of Birth', accountData['date_of_birth']),
+                      _buildDetailRow('ID Type', accountData['id_type']),
+                      _buildDetailRow('Role', accountData['role']),
+                      if (accountData['role'] == 'collector') ...[
+                        _buildDetailRow('Truck Number', accountData['truck_number']),
+                        _buildDetailRow('Collection Zone', accountData['collection_zone']),
+                      ],
+                      _buildDetailRow('Status', accountData['status'] ?? 'Active'),
+                      SizedBox(height: 20),
+                      if (accountData['idImageUrl'] != null)
+                        Container(
+                          width: double.infinity, // Makes the image stretch to fit within the parent
+                          height: 200, // Adjustable height
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              accountData['idImageUrl'],
+                              fit: BoxFit.contain, // Ensures the full image is visible
+                            ),
+                          ),
+                        ),
+                      SizedBox(height: 10),
+                      if (accountData['selfieImageUrl'] != null)
+                        Container(
+                          width: double.infinity, // Makes the image stretch to fit within the parent
+                          height: 200, // Adjustable height
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              accountData['selfieImageUrl'],
+                              fit: BoxFit.contain, // Ensures the full image is visible
+                            ),
+                          ),
+                        ),
+
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 15),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  TextButton(
+                    child: Text('Close', style: TextStyle(color: Colors.white)),
+                    style: TextButton.styleFrom(backgroundColor: Colors.green.shade600),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                  TextButton(
+                    child: Text(accountData['status'] == 'inactive' ? 'Activate' : 'Deactivate', style: TextStyle(color: Colors.white)),
+                    style: TextButton.styleFrom(backgroundColor: Colors.orange),
+                    onPressed: () {
+                      _toggleAccountStatus(accountId, accountData['status'] ?? 'active');
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                  TextButton(
+                    child: Text('Reset Password', style: TextStyle(color: Colors.white)),
+                    style: TextButton.styleFrom(backgroundColor: Colors.blue.shade600),
+                    onPressed: () {
+                      _showPasswordResetOptions(accountId, accountData['email']);
+                    },
+                  ),
+                  TextButton(
+                    child: Text('Delete', style: TextStyle(color: Colors.white)),
+                    style: TextButton.styleFrom(backgroundColor: Colors.red),
+                    onPressed: () {
+                      _deleteAccount(accountId);
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          left: 20,
+          right: 20,
+          child: CircleAvatar(
+            backgroundColor: Colors.transparent,
+            radius: 45,
+            child: ClipRRect(
+              borderRadius: BorderRadius.all(Radius.circular(45)),
+              child: Image.network(accountData['selfieImageUrl'] ?? ''),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -842,3 +942,4 @@ extension StringExtension on String {
     return "${this[0].toUpperCase()}${this.substring(1)}";
   }
 }
+

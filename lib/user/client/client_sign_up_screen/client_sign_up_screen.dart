@@ -649,8 +649,8 @@ class _ClientSignUpScreenState extends State<ClientSignUpScreen> {
             'id_number': idNumberController.text,
             'phone_number': phoneNumberController.text,
             'address': addressController.text,
-            'id_image_url': idImageUrl,
-            'selfie_image_url': selfieImageUrl,
+            'idImageUrl': idImageUrl,
+            'selfieImageUrl': selfieImageUrl,
             'created_at': DateTime.now().toIso8601String(),
             'role': 'client',
             'location': _selectedLocation != null

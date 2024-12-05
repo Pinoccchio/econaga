@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'AccountPage.dart';
 import 'notifications_page.dart';
 import 'RequestPage.dart';
@@ -6,42 +7,79 @@ import 'client_home_page.dart';
 import 'complaints_page/ComplaintsPage.dart';
 
 class ClientHomeScreenContainer extends StatefulWidget {
-  final String userId; // Add a userId parameter
+  final String userId;
 
-  ClientHomeScreenContainer({required this.userId}); // Constructor
+  ClientHomeScreenContainer({required this.userId});
 
   @override
   _ClientHomeScreenContainerState createState() => _ClientHomeScreenContainerState();
 }
 
 class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
-  int _selectedIndex = 2; // Default to the Home tab (index 2)
-
-  // List of pages for each BottomNavigationBar item
+  int _selectedIndex = 2;
+  int _notificationCount = 0;
   final List<Widget> _pages = [];
 
   @override
   void initState() {
     super.initState();
     _pages.addAll([
-      RequestPage(userId: widget.userId), // Pass userId to RequestPage
+      RequestPage(userId: widget.userId),
       NotificationPage(userId: widget.userId),
       ClientHomePage(onRequestNow: _navigateToRequestPage, userId: widget.userId),
       ComplaintsPage(userId: widget.userId),
-      AccountPage(userId: widget.userId), // Pass userId to AccountPage
+      AccountPage(userId: widget.userId),
     ]);
+    _listenToNotifications();
   }
 
+  void _listenToNotifications() {
+    FirebaseFirestore.instance
+        .collectionGroup('GARBAGE_REQUESTS')
+        .where('user_id', isEqualTo: widget.userId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .listen((snapshot) {
+      _updateNotificationCount(snapshot.docs.length);
+    });
+
+    FirebaseFirestore.instance
+        .collectionGroup('BURIAL_REQUESTS')
+        .where('user_id', isEqualTo: widget.userId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .listen((snapshot) {
+      _updateNotificationCount(snapshot.docs.length);
+    });
+
+    FirebaseFirestore.instance
+        .collectionGroup('TRANSPORTATION_REQUESTS')
+        .where('user_id', isEqualTo: widget.userId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .listen((snapshot) {
+      _updateNotificationCount(snapshot.docs.length);
+    });
+  }
+
+  void _updateNotificationCount(int count) {
+    setState(() {
+      _notificationCount += count;
+    });
+  }
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
+      if (index == 1) {
+        _notificationCount = 0;
+      }
     });
   }
 
   void _navigateToRequestPage() {
     setState(() {
-      _selectedIndex = 0; // Navigate to Request tab
+      _selectedIndex = 0;
     });
   }
 
@@ -50,7 +88,7 @@ class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
     return Scaffold(
       body: IndexedStack(
         index: _selectedIndex,
-        children: _pages, // Keep state of all pages
+        children: _pages,
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
@@ -61,7 +99,35 @@ class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
             label: 'Request',
           ),
           BottomNavigationBarItem(
-            icon: Icon(_selectedIndex == 1 ? Icons.notifications : Icons.notifications_outlined),
+            icon: Stack(
+              children: [
+                Icon(_selectedIndex == 1 ? Icons.notifications : Icons.notifications_outlined),
+                if (_notificationCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: EdgeInsets.all(1),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      constraints: BoxConstraints(
+                        minWidth: 12,
+                        minHeight: 12,
+                      ),
+                      child: Text(
+                        '$_notificationCount',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             label: 'Notification',
           ),
           BottomNavigationBarItem(
@@ -91,3 +157,4 @@ class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
     );
   }
 }
+

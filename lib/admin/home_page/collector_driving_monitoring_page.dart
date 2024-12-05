@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 
 class CollectorDriverMonitoringPage extends StatefulWidget {
   @override
@@ -100,13 +99,6 @@ class _CollectorDriverMonitoringPageState
                         child: Text('Availability', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ),
-                    Expanded(
-                      flex: 1,
-                      child: Align(
-                        alignment: Alignment.center,
-                        child: Text('Manage', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ),
                   ],
                 ),
                 SizedBox(height: 10),
@@ -120,14 +112,6 @@ class _CollectorDriverMonitoringPageState
                         name: collector['name'],
                         availability: collector['availability'],
                         image: collector['image'],
-                        onAssign: () {
-                          // Handle assign logic here
-                          Fluttertoast.showToast(
-                            msg: "${collector['name']} assigned!",
-                            backgroundColor: Colors.green,
-                            textColor: Colors.white,
-                          );
-                        },
                       );
                     },
                   ),
@@ -145,13 +129,11 @@ class CollectorCard extends StatelessWidget {
   final String name;
   final String availability;
   final String image;
-  final VoidCallback onAssign;
 
   CollectorCard({
     required this.name,
     required this.availability,
     required this.image,
-    required this.onAssign,
   });
 
   Color get availabilityColor {
@@ -208,25 +190,6 @@ class CollectorCard extends StatelessWidget {
                   availability.toUpperCase(),
                   style: TextStyle(color: availabilityColor, fontWeight: FontWeight.bold),
                 ),
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 1,
-            child: Align(
-              alignment: Alignment.center,
-              child: ElevatedButton(
-                onPressed: onAssign,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: Colors.blue,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(color: Colors.blue),
-                  ),
-                ),
-                child: Text('Assign'),
               ),
             ),
           ),

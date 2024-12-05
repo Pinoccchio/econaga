@@ -123,12 +123,6 @@ class ClientHomePage extends StatelessWidget {
           ],
         ),
       ),
-      actions: [
-        IconButton(
-          icon: Icon(Icons.notifications_outlined, color: Colors.white),
-          onPressed: () {},
-        ),
-      ],
     );
   }
 

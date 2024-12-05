@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class AdminLipatBahayServiceRequest extends StatefulWidget {
   @override
@@ -11,7 +12,6 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
   String searchQuery = '';
   List<DocumentSnapshot> allRequests = [];
   List<DocumentSnapshot> filteredRequests = [];
-  ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -45,222 +45,487 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: Text('Lipat Bahay Service Requests'),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        titleTextStyle: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          color: Colors.black,
+      backgroundColor: Colors.grey[50],
+      body: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Lipat Bahay Service Request',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              SizedBox(height: 24),
+              _buildSearchBar(),
+              SizedBox(height: 24),
+              _buildPendingHeader(),
+              SizedBox(height: 16),
+              Expanded(
+                child: _buildRequestList(),
+              ),
+            ],
+          ),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh, color: Colors.black),
-            onPressed: _fetchRequests,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildRequestsHeader(filteredRequests.length),
-          Expanded(
-            child: filteredRequests.isEmpty
-                ? Center(
-              child: Text(
-                'No requests available',
-                style: TextStyle(fontSize: 18, color: Colors.grey),
-              ),
-            )
-                : _buildRequestList(),
-          ),
-        ],
       ),
     );
   }
 
-  Widget _buildRequestsHeader(int count) {
+  Widget _buildSearchBar() {
     return Container(
-      padding: EdgeInsets.all(16),
-      color: Colors.white,
-      child: Row(
-        children: [
-          Text(
-            'Total Requests',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.green,
-            ),
-          ),
-          SizedBox(width: 8),
-          CircleAvatar(
-            radius: 12,
-            backgroundColor: Colors.green,
-            child: Text(
-              count.toString(),
-              style: TextStyle(color: Colors.white, fontSize: 12),
-            ),
-          ),
-          Spacer(),
-          Container(
-            width: 200,
-            child: TextField(
-              decoration: InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Search',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 8),
-              ),
-              onChanged: _filterRequests,
-            ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
           ),
         ],
+      ),
+      child: TextField(
+        decoration: InputDecoration(
+          hintText: 'Search',
+          prefixIcon: Icon(Icons.search, color: Colors.grey),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+        onChanged: _filterRequests,
       ),
     );
   }
 
-  Widget _buildRequestList() {
-    return ListView.builder(
-      itemCount: filteredRequests.length,
-      itemBuilder: (context, index) {
-        final request = filteredRequests[index];
-        final data = request.data() as Map<String, dynamic>;
-        return _buildRequestCard(request, data);
-      },
-    );
-  }
-
-  Widget _buildRequestCard(DocumentSnapshot request, Map<String, dynamic> data) {
-    String firstName = data['first_name'] as String? ?? '';
-    String lastName = data['last_name'] as String? ?? '';
-    String email = data['email'] as String? ?? '';
-    String contactNumber = data['contact_number'] as String? ?? 'N/A';
-    Map<String, dynamic> pickupLocation = data['pickup_location'] as Map<String, dynamic>? ?? {};
-    Map<String, dynamic> destinationLocation = data['destination_location'] as Map<String, dynamic>? ?? {};
-    String userId = data['user_id'] as String? ?? '';
-
-    return Card(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: ExpansionTile(
-        title: Text('$firstName $lastName', style: TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(DateFormat('MM/dd/yyyy').format((data['created_at'] as Timestamp).toDate())),
-        leading: _buildProfilePicture(userId),
-        children: [
-          ListTile(
-            title: Text('Email'),
-            subtitle: Text(email),
-          ),
-          ListTile(
-            title: Text('Contact Number'),
-            subtitle: Text(contactNumber),
-          ),
-          ListTile(
-            title: Text('Pickup Location'),
-            subtitle: _buildLocationInfo(pickupLocation),
-          ),
-          ListTile(
-            title: Text('Destination Location'),
-            subtitle: _buildLocationInfo(destinationLocation),
-          ),
-          ListTile(
-            title: Text('Status'),
-            subtitle: Text(data['status'] as String? ?? 'N/A'),
-          ),
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: () => updateRequestStatus(request.id, 'approved'),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  child: Text('APPROVE'),
-                ),
-                ElevatedButton(
-                  onPressed: () => updateRequestStatus(request.id, 'declined'),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  child: Text('DECLINE'),
-                ),
-                ElevatedButton(
-                  onPressed: () => _deleteRequest(request.id),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                  child: Text('DELETE'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLocationInfo(Map<String, dynamic> location) {
-    String address = location['address'] as String? ?? 'N/A';
-    double latitude = location['latitude'] as double? ?? 0.0;
-    double longitude = location['longitude'] as double? ?? 0.0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildPendingHeader() {
+    return Row(
       children: [
-        Text(address),
-        Text('Lat: ${latitude.toStringAsFixed(6)}'),
-        Text('Long: ${longitude.toStringAsFixed(6)}'),
+        Text(
+          'Pending Approvals',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        SizedBox(width: 8),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.green,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            '${filteredRequests.length}',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildProfilePicture(String userId) {
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('USERS_ACCOUNTS').doc(userId).get(),
-      builder: (context, userSnapshot) {
-        if (userSnapshot.connectionState == ConnectionState.waiting) {
-          return CircularProgressIndicator();
-        }
-        if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
-          return CircleAvatar(child: Icon(Icons.person));
-        }
+  Widget _buildRequestList() {
+    return Column(
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              SizedBox(width: 40), // Space for numbering
+              SizedBox(width: 52), // Space for avatar
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Name',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.green,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 1,
+                child: Text(
+                  'Status',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.green,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Request Details',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.green,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              SizedBox(width: 160), // Space for action buttons
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            itemCount: filteredRequests.length,
+            itemBuilder: (context, index) {
+              final request = filteredRequests[index];
+              final data = request.data() as Map<String, dynamic>;
+              return _buildRequestCard(request, data, index + 1);
+            },
+          ),
+        ),
+      ],
+    );
+  }
 
-        final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-        String profilePicUrl = userData['profile_picture'] as String? ?? '';
-        return CircleAvatar(
-          backgroundImage: profilePicUrl.isNotEmpty ? NetworkImage(profilePicUrl) : null,
-          child: profilePicUrl.isEmpty ? Icon(Icons.person) : null,
+  Widget _buildRequestCard(DocumentSnapshot request, Map<String, dynamic> data, int index) {
+    String firstName = data['first_name'] ?? '';
+    String lastName = data['last_name'] ?? '';
+    DateTime requestDate = (data['created_at'] as Timestamp).toDate();
+    String status = data['status'] ?? 'pending';
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 40,
+              child: Text(
+                '$index.',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ),
+            _buildProfilePicture(data['user_id'] ?? ''),
+            SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$firstName $lastName',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    DateFormat('d/MM/yyyy').format(requestDate),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: _buildStatusBadge(status),
+            ),
+            Expanded(
+              flex: 2,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton(
+                    onPressed: () => _showDetailsDialog(context, data),
+                    child: Text(
+                      'Details',
+                      style: TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: 8),
+            _buildActionButton(
+              'APPROVE',
+              Colors.green,
+                  () => updateRequestStatus(request.id, 'approved'),
+            ),
+            SizedBox(width: 8),
+            _buildActionButton(
+              'DECLINE',
+              Colors.red,
+                  () => updateRequestStatus(request.id, 'declined'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(String status) {
+    Color badgeColor;
+    switch (status.toLowerCase()) {
+      case 'approved':
+        badgeColor = Colors.green;
+        break;
+      case 'declined':
+        badgeColor = Colors.red;
+        break;
+      case 'completed':
+        badgeColor = Colors.blue;
+        break;
+      default:
+        badgeColor = Colors.orange;
+    }
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: badgeColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: badgeColor),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          color: badgeColor,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton(String text, Color color, VoidCallback onPressed) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+        ),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfilePicture(String userId) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.grey[200],
+      ),
+      child: FutureBuilder<DocumentSnapshot>(
+        future: FirebaseFirestore.instance.collection('USERS_ACCOUNTS').doc(userId).get(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return Center(
+              child: Text(
+                userId.isNotEmpty ? userId[0].toUpperCase() : 'U',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            );
+          }
+
+          final userData = snapshot.data!.data() as Map<String, dynamic>;
+          String profilePicUrl = userData['selfieImageUrl'] ?? '';
+
+          if (profilePicUrl.isEmpty) {
+            return Center(
+              child: Text(
+                userId[0].toUpperCase(),
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            );
+          }
+
+          return ClipOval(
+            child: CachedNetworkImage(
+              imageUrl: profilePicUrl,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => CircularProgressIndicator(),
+              errorWidget: (context, url, error) => Icon(Icons.error),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showDetailsDialog(BuildContext context, Map<String, dynamic> data) {
+    // Extract location data safely
+    final pickupLocation = data['pickup_location'] as Map<String, dynamic>? ?? {};
+    final destinationLocation = data['destination_location'] as Map<String, dynamic>? ?? {};
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.rectangle,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 10.0,
+                  offset: const Offset(0.0, 10.0),
+                ),
+              ],
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    "Request Details",
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  _buildDetailItem("Name", "${data['first_name']} ${data['last_name']}"),
+                  _buildDetailItem("Email", data['email'] ?? 'N/A'),
+                  _buildDetailItem("Contact Number", data['contact_number'] ?? 'N/A'),
+                  _buildDetailItem("Pickup Address", pickupLocation['address'] ?? 'N/A'),
+                  _buildDetailItem("Pickup Latitude", pickupLocation['latitude']?.toString() ?? 'N/A'),
+                  _buildDetailItem("Pickup Longitude", pickupLocation['longitude']?.toString() ?? 'N/A'),
+                  _buildDetailItem("Destination Address", destinationLocation['address'] ?? 'N/A'),
+                  _buildDetailItem("Destination Latitude", destinationLocation['latitude']?.toString() ?? 'N/A'),
+                  _buildDetailItem("Destination Longitude", destinationLocation['longitude']?.toString() ?? 'N/A'),
+                  _buildDetailItem("Status", data['status'] ?? 'pending'),
+                  _buildDetailItem("Date", DateFormat('MM/dd/yyyy').format((data['created_at'] as Timestamp).toDate())),
+                  SizedBox(height: 24),
+                  TextButton(
+                    child: Text(
+                      "Close",
+                      style: TextStyle(fontSize: 18, color: Colors.blue),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
         );
       },
     );
   }
 
-  void _deleteRequest(String docId) {
-    FirebaseFirestore.instance.collection('TRANSPORTATION_REQUESTS').doc(docId).delete().then((_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Request deleted successfully')),
-      );
-      _fetchRequests();
-    }).catchError((error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete request: $error')),
-      );
-    });
+  Widget _buildDetailItem(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 140,
+            child: Text(
+              "$label:",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(color: Colors.black87),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  void updateRequestStatus(String docId, String status) {
+  void updateRequestStatus(String requestId, String status) {
     FirebaseFirestore.instance
         .collection('TRANSPORTATION_REQUESTS')
-        .doc(docId)
+        .doc(requestId)
         .update({'status': status}).then((_) {
+      // Show a confirmation message using SnackBar
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Request status updated to $status')),
+        SnackBar(
+          content: Text('Request ${status.toUpperCase()}'),
+          backgroundColor: status == 'approved' ? Colors.green : Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
       );
+      // Refresh the requests
       _fetchRequests();
     }).catchError((error) {
+      // Show an error message if the update fails
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update status: $error')),
+        SnackBar(
+          content: Text('Failed to update status: $error'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
       );
     });
   }
 }
+

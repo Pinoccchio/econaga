@@ -168,7 +168,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 : _currentPage == 'CollectorDriverMonitoring'
                 ? CollectorDriverMonitoringPage()
                 : _currentPage == 'TruckMonitoring'
-                ? TruckMonitoringPage() // Add this case for the new page
+                ? TruckMonitoringPage()
                 : _currentPage == 'Account'
                 ? AdminAccountPage()
                 : Center(child: Text('Content for $_currentPage')),

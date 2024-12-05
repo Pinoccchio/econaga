@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:math';
 
 class ComplaintsOverview extends StatefulWidget {
@@ -134,7 +135,6 @@ class ComplaintsList extends StatelessWidget {
       builder: (context, snapshot) {
         if (!snapshot.hasData) return CircularProgressIndicator();
 
-        // Check if there are no complaints
         if (snapshot.data!.docs.isEmpty) {
           return Center(
             child: Text(
@@ -148,7 +148,7 @@ class ComplaintsList extends StatelessWidget {
           children: snapshot.data!.docs.map((doc) {
             Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
             bool isRead = data['status'] == 'read';
-            String userId = data['userId']; // Assuming each complaint has a userId field
+            String userId = data['userId'];
 
             return ListTile(
               leading: FutureBuilder<DocumentSnapshot>(
@@ -162,10 +162,19 @@ class ComplaintsList extends StatelessWidget {
                   }
 
                   final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-                  String profilePicUrl = userData['profile_picture'] as String? ?? '';
-                  return CircleAvatar(
-                    backgroundImage: profilePicUrl.isNotEmpty ? NetworkImage(profilePicUrl) : null,
-                    child: profilePicUrl.isEmpty ? Icon(Icons.person) : null,
+                  String profilePicUrl = userData['selfieImageUrl'] as String? ?? '';
+
+                  return ClipOval(
+                    child: profilePicUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                      imageUrl: profilePicUrl,
+                      placeholder: (context, url) => CircularProgressIndicator(),
+                      errorWidget: (context, url, error) => Icon(Icons.person),
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                    )
+                        : CircleAvatar(child: Icon(Icons.person)),
                   );
                 },
               ),
@@ -258,7 +267,7 @@ class ComplaintDetail extends StatelessWidget {
                       }
 
                       final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-                      String profilePicUrl = userData['profile_picture'] as String? ?? '';
+                      String profilePicUrl = userData['selfieImageUrl'] as String? ?? '';
 
                       return _buildMessageBubble(
                         '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}',
@@ -344,9 +353,24 @@ class ComplaintDetail extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          backgroundImage: profilePicUrl,
-          child: profilePicUrl == null ? Icon(Icons.person) : null,
+        ClipOval(
+          child: profilePicUrl != null
+              ? profilePicUrl is NetworkImage
+              ? CachedNetworkImage(
+            imageUrl: (profilePicUrl as NetworkImage).url,
+            placeholder: (context, url) => CircularProgressIndicator(),
+            errorWidget: (context, url, error) => Icon(Icons.person),
+            width: 40,
+            height: 40,
+            fit: BoxFit.cover,
+          )
+              : Image(
+            image: profilePicUrl,
+            width: 40,
+            height: 40,
+            fit: BoxFit.cover,
+          )
+              : CircleAvatar(child: Icon(Icons.person)),
         ),
         SizedBox(width: 8),
         Expanded(
@@ -383,3 +407,5 @@ class ComplaintDetail extends StatelessWidget {
     );
   }
 }
+
+

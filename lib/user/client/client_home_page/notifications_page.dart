@@ -209,6 +209,11 @@ class _NotificationPageState extends State<NotificationPage>
         statusColor = Colors.grey;
     }
 
+    final createdAt = request['created_at'];
+    final formattedDate = (createdAt is Timestamp)
+        ? DateFormat('MM/dd/yyyy').format(createdAt.toDate())
+        : 'N/A';
+
     return Card(
       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -219,7 +224,7 @@ class _NotificationPageState extends State<NotificationPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Status: ${request['status']}'),
-            Text('Date: ${DateFormat('MM/dd/yyyy').format((request['created_at'] as Timestamp).toDate())}'),
+            Text('Date: $formattedDate'),
           ],
         ),
         trailing: Container(
@@ -236,6 +241,11 @@ class _NotificationPageState extends State<NotificationPage>
   }
 
   void _showRequestDetails(Map<String, dynamic> request) {
+    final createdAt = request['created_at'];
+    final formattedDate = (createdAt is Timestamp)
+        ? DateFormat('MM/dd/yyyy').format(createdAt.toDate())
+        : 'N/A';
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -295,7 +305,7 @@ class _NotificationPageState extends State<NotificationPage>
                             Icon(Icons.date_range, color: Colors.green.shade700),
                             const SizedBox(width: 8),
                             Text(
-                              'Date: ${DateFormat('MM/dd/yyyy').format((request['created_at'] as Timestamp).toDate())}',
+                              'Date: $formattedDate',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
@@ -345,4 +355,5 @@ class _NotificationPageState extends State<NotificationPage>
       ),
     );
   }
+
 }

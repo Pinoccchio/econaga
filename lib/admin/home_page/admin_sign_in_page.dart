@@ -91,7 +91,11 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                             },
                             child: Text(
                               'LOG IN',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                             style: ElevatedButton.styleFrom(
                               padding: EdgeInsets.symmetric(vertical: 16),
@@ -103,13 +107,17 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                           ),
                         ),
                         SizedBox(height: 20),
-                        // Links
+                        // Forgot Password Link
                         TextButton(
                           onPressed: () {
-                            // Forgot Password functionality here
+                            _forgotPassword(context);
                           },
-                          child: Text('Forgot your password?', style: TextStyle(color: Colors.green)),
+                          child: Text(
+                            'Forgot your password?',
+                            style: TextStyle(color: Colors.green),
+                          ),
                         ),
+                        // Registration Link
                         TextButton(
                           onPressed: () {
                             Navigator.push(
@@ -204,18 +212,97 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
     }
   }
 
+  void _forgotPassword(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final TextEditingController _resetEmailController = TextEditingController();
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Text('Forgot Password', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Enter your email address to reset your password.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 10),
+              TextField(
+                controller: _resetEmailController,
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  prefixIcon: Icon(Icons.email, color: Colors.green),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: Text('Cancel', style: TextStyle(color: Colors.red)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                String resetEmail = _resetEmailController.text.trim();
+                if (resetEmail.isNotEmpty) {
+                  try {
+                    await FirebaseAuth.instance.sendPasswordResetEmail(email: resetEmail);
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Password reset email sent!',
+                          style: TextStyle(color: Colors.white), // White text
+                        ),
+                        backgroundColor: Colors.green, // Green background
+                      ),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Error: Unable to send email.',
+                          style: TextStyle(color: Colors.white), // White text
+                        ),
+                        backgroundColor: Colors.red, // Red background for error
+                      ),
+                    );
+                  }
+                }
+              },
+              child: Text(
+                'Submit',
+                style: TextStyle(color: Colors.white), // Ensures text color is white
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green, // Button background color
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showErrorDialog(BuildContext context, String message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Login Failed'),
-        content: Text(message),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text('Login Failed', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(message, style: TextStyle(fontSize: 16)),
         actions: [
           TextButton(
             onPressed: () {
               Navigator.pop(context);
             },
-            child: Text('OK'),
+            child: Text('OK', style: TextStyle(color: Colors.green)),
           ),
         ],
       ),
