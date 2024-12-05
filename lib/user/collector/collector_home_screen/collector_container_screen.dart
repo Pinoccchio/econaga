@@ -1,14 +1,14 @@
-import 'package:econaga_prj/user/collector/collector_home_screen/profile_screen.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-
+import 'package:provider/provider.dart';
+import '../../../services/location_services.dart';
 import 'approve_service_screen/approve_service_screen.dart';
 import 'collector_home_page_screen.dart';
+import 'profile_screen.dart';
 
 class CollectorContainer extends StatefulWidget {
-  final String userId; // Add this line
+  final String userId;
 
-  CollectorContainer({required this.userId}); // Update constructor
+  const CollectorContainer({Key? key, required this.userId}) : super(key: key);
 
   @override
   _CollectorContainerState createState() => _CollectorContainerState();
@@ -17,17 +17,28 @@ class CollectorContainer extends StatefulWidget {
 class _CollectorContainerState extends State<CollectorContainer> {
   int _currentIndex = 1;
 
-  late List<Widget> _screens; // Declare screens
+  late List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
-    // Initialize screens in initState
     _screens = [
       ApproveServicesScreen(),
       CollectorHomePage(userId: widget.userId),
-      ProfileScreen(userId: widget.userId), // Access widget.userId
+      ProfileScreen(userId: widget.userId),
     ];
+
+    // Start location tracking when the container is initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<LocationService>(context, listen: false).startTracking(widget.userId);
+    });
+  }
+
+  @override
+  void dispose() {
+    // Stop location tracking when the container is disposed
+    Provider.of<LocationService>(context, listen: false).stopTracking();
+    super.dispose();
   }
 
   @override
@@ -41,7 +52,7 @@ class _CollectorContainerState extends State<CollectorContainer> {
             _currentIndex = index;
           });
         },
-        items: [
+        items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.description),
             label: 'Approved',

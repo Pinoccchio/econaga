@@ -9,7 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../firebase_services/firebase_services.dart';
+import '../../../services/firebase_services.dart';
 import '../client_sign_in_screen/client_sign_in_screen.dart';
 import 'email_verification_screen.dart';
 

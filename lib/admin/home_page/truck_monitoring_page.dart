@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -14,13 +13,21 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
   List<Map<String, dynamic>> filteredCollectors = [];
   List<Map<String, dynamic>> allCollectors = [];
   final TextEditingController _searchController = TextEditingController();
-  final MapController _mapController = MapController();
+  MapController _mapController = MapController(); //Initialized in initState now
   bool _isMapVisible = false;
   String? _selectedTruckId;
+  bool _isMapReady = false; // Added _isMapReady variable
+
+  @override
+  void initState() {
+    super.initState();
+    _mapController = MapController(); // Initialize MapController in initState
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _mapController.dispose(); // Dispose of MapController
     super.dispose();
   }
 
@@ -38,23 +45,47 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
       _isMapVisible = !_isMapVisible;
       _selectedTruckId = _isMapVisible ? (truckId ?? _selectedTruckId) : null;
     });
+
+    if (_isMapVisible && truckId != null) {
+      final selectedCollector = filteredCollectors.firstWhere((collector) => collector['id'] == truckId);
+      final LatLng position = _parseRealtimeLocation(selectedCollector['realtime_location']);
+
+      // Use Future.delayed to ensure the map is ready before moving
+      Future.delayed(Duration(milliseconds: 100), () {
+        if (_isMapReady) {
+          _mapController.move(position, 14.0);
+        }
+      });
+    }
   }
 
   LatLng _getCenterPosition() {
     if (filteredCollectors.isNotEmpty) {
-      List<String> coordinates = (filteredCollectors[0]['collection_zone'] as String).split(',');
-      double latitude = double.parse(coordinates[0]);
-      double longitude = double.parse(coordinates[1]);
-      return LatLng(latitude, longitude);
+      Map<String, dynamic>? realtimeLocation = filteredCollectors[0]['realtime_location'];
+      if (realtimeLocation != null) {
+        try {
+          double latitude = realtimeLocation['latitude'];
+          double longitude = realtimeLocation['longitude'];
+          return LatLng(latitude, longitude);
+        } catch (e) {
+          debugPrint("Error parsing coordinates: $e");
+        }
+      }
     }
-    return LatLng(13.6218, 123.1945); // Default position if no trucks
+    return LatLng(0, 0); // Default center if no valid coordinates
   }
 
-  LatLng _parseCollectionZone(String collectionZone) {
-    List<String> coordinates = collectionZone.split(',');
-    double latitude = double.parse(coordinates[0]);
-    double longitude = double.parse(coordinates[1]);
+  LatLng _parseRealtimeLocation(Map<String, dynamic> realtimeLocation) {
+    double latitude = realtimeLocation['latitude'] ?? 0.0;
+    double longitude = realtimeLocation['longitude'] ?? 0.0;
     return LatLng(latitude, longitude);
+  }
+
+  String _getDescriptiveLocation(Map<String, dynamic> realtimeLocation) {
+    double latitude = realtimeLocation['latitude'] ?? 0.0;
+    double longitude = realtimeLocation['longitude'] ?? 0.0;
+    // This is a placeholder. In a real application, you would use a geocoding service to get the actual location name.
+    return 'Lat: ${latitude.toStringAsFixed(2)}, Long: ${longitude.toStringAsFixed(2)}';
   }
 
   @override
@@ -110,10 +141,10 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
                       'name': '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}',
                       'truck_number': data['truck_number'] ?? '',
                       'availability': data['truck_availability'] ?? 'For Repair',
-                      'collection_zone': data['collection_zone'] ?? '0,0',
+                      'realtime_location': data['realtime_location'] ?? {'latitude': 0.0, 'longitude': 0.0},
                     };
                   }).toList();
-                  filteredCollectors = List.from(allCollectors); // Initially show all
+                  filteredCollectors = List.from(allCollectors);
                 }
 
                 return _isMapVisible
@@ -133,34 +164,55 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
       options: MapOptions(
         initialCenter: _getCenterPosition(),
         initialZoom: 14.0,
+        onMapReady: () {
+          setState(() {
+            _isMapReady = true;
+          });
+        },
       ),
       children: [
         TileLayer(
           urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
           subdomains: ['a', 'b', 'c'],
         ),
+        MarkerLayer(
+          markers: filteredCollectors.map((collector) {
+            LatLng position = _parseRealtimeLocation(collector['realtime_location']);
+            return Marker(
+              point: position,
+              width: 40.0,
+              height: 40.0,
+              child: Icon(
+                Icons.local_shipping,
+                color: collector['availability'] == 'Available' ? Colors.green : Colors.red,
+                size: 40.0,
+              ),
+            );
+          }).toList(),
+        ),
         PopupMarkerLayerWidget(
           options: PopupMarkerLayerOptions(
-            markers: filteredCollectors
-                .where((collector) =>
-            _selectedTruckId == null || collector['id'] == _selectedTruckId)
+            markers: _selectedTruckId != null
+                ? filteredCollectors
+                .where((collector) => collector['id'] == _selectedTruckId)
                 .map((collector) {
-              LatLng position = _parseCollectionZone(collector['collection_zone'] as String);
+              LatLng position = _parseRealtimeLocation(collector['realtime_location']);
               return Marker(
                 point: position,
                 width: 40.0,
                 height: 40.0,
                 child: Icon(
                   Icons.local_shipping,
-                  color: collector['availability'] == 'Available' ? Colors.green : Colors.red,
+                  color: Colors.blue,
                   size: 40.0,
                 ),
               );
-            }).toList(),
+            }).toList()
+                : [],
             popupDisplayOptions: PopupDisplayOptions(
               builder: (BuildContext context, Marker marker) {
                 final collector = filteredCollectors.firstWhere(
-                      (c) => _parseCollectionZone(c['collection_zone'] as String) == marker.point,
+                      (c) => _parseRealtimeLocation(c['realtime_location']) == marker.point,
                 );
                 return Card(
                   child: Padding(
@@ -190,10 +242,11 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Row(
             children: [
-              Expanded(flex: 4, child: Center(child: Text('Name', style: TextStyle(fontWeight: FontWeight.bold)))),
-              Expanded(flex: 3, child: Center(child: Text('Truck Number', style: TextStyle(fontWeight: FontWeight.bold)))),
+              Expanded(flex: 3, child: Center(child: Text('Name', style: TextStyle(fontWeight: FontWeight.bold)))),
+              Expanded(flex: 2, child: Center(child: Text('Truck Number', style: TextStyle(fontWeight: FontWeight.bold)))),
               Expanded(flex: 2, child: Center(child: Text('Status', style: TextStyle(fontWeight: FontWeight.bold)))),
-              Expanded(flex: 3, child: Center(child: Text('Action', style: TextStyle(fontWeight: FontWeight.bold)))),
+              Expanded(flex: 3, child: Center(child: Text('Location', style: TextStyle(fontWeight: FontWeight.bold)))),
+              Expanded(flex: 2, child: Center(child: Text('Action', style: TextStyle(fontWeight: FontWeight.bold)))),
             ],
           ),
         ),
@@ -207,6 +260,7 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
                 name: collector['name'],
                 truckNumber: collector['truck_number'],
                 availability: collector['availability'],
+                location: _getDescriptiveLocation(collector['realtime_location']),
                 onMapToggle: _toggleMapVisibility,
               );
             },
@@ -222,6 +276,7 @@ class TruckListItem extends StatelessWidget {
   final String name;
   final String truckNumber;
   final String availability;
+  final String location;
   final Function(String?) onMapToggle;
 
   const TruckListItem({
@@ -230,6 +285,7 @@ class TruckListItem extends StatelessWidget {
     required this.name,
     required this.truckNumber,
     required this.availability,
+    required this.location,
     required this.onMapToggle,
   }) : super(key: key);
 
@@ -266,46 +322,50 @@ class TruckListItem extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              flex: 4,
-              child: Center(
-                child: Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-            Expanded(
               flex: 3,
-              child: Center(
-                child: Text(
-                  truckNumber,
-                  style: const TextStyle(fontSize: 16),
+              child: Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
+                textAlign: TextAlign.center,
               ),
             ),
             Expanded(
               flex: 2,
-              child: Center(
-                child: Text(
-                  availability,
-                  style: TextStyle(
-                    color: availabilityColor,
-                    fontWeight: FontWeight.w500,
-                  ),
+              child: Text(
+                truckNumber,
+                style: const TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                availability,
+                style: TextStyle(
+                  color: availabilityColor,
+                  fontWeight: FontWeight.w500,
                 ),
+                textAlign: TextAlign.center,
               ),
             ),
             Expanded(
               flex: 3,
+              child: Text(
+                location,
+                style: const TextStyle(fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Expanded(
+              flex: 2,
               child: ElevatedButton(
                 onPressed: () => onMapToggle(id),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,  // Background color of the button
-                  foregroundColor: Colors.white,  // Text color of the button
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
@@ -319,3 +379,5 @@ class TruckListItem extends StatelessWidget {
     );
   }
 }
+
+

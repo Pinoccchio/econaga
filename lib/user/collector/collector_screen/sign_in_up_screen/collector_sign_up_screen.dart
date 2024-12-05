@@ -1,10 +1,10 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../firebase_services/firebase_services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../../../../services/firebase_services.dart';
 import 'collector_sign_in_screen.dart';
 
 class CollectorSignUpScreen extends StatefulWidget {
