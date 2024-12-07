@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class AdminGarbageCollectionRequest extends StatefulWidget {
+  const AdminGarbageCollectionRequest({Key? key}) : super(key: key);
+
   @override
   _AdminGarbageCollectionRequestState createState() => _AdminGarbageCollectionRequestState();
 }
@@ -12,6 +14,12 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
   String searchQuery = '';
   List<DocumentSnapshot> allRequests = [];
   List<DocumentSnapshot> filteredRequests = [];
+  Map<String, int> statusCounts = {
+    'pending': 0,
+    'approved': 0,
+    'declined': 0,
+    'completed': 0,
+  };
 
   @override
   void initState() {
@@ -28,6 +36,26 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
     setState(() {
       allRequests = snapshot.docs;
       filteredRequests = allRequests;
+      _updateStatusCounts();
+    });
+  }
+
+  void _updateStatusCounts() {
+    final counts = {
+      'pending': 0,
+      'approved': 0,
+      'declined': 0,
+      'completed': 0,
+    };
+
+    for (var request in allRequests) {
+      final data = request.data() as Map<String, dynamic>;
+      final status = data['status'] as String? ?? 'pending';
+      counts[status.toLowerCase()] = (counts[status.toLowerCase()] ?? 0) + 1;
+    }
+
+    setState(() {
+      statusCounts = counts;
     });
   }
 
@@ -48,7 +76,7 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
       backgroundColor: Colors.grey[50],
       body: SafeArea(
         child: Padding(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -62,6 +90,8 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
               ),
               SizedBox(height: 24),
               _buildSearchBar(),
+              SizedBox(height: 24),
+              _buildStatusCards(),
               SizedBox(height: 24),
               _buildPendingHeader(),
               SizedBox(height: 16),
@@ -100,11 +130,67 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
     );
   }
 
+  Widget _buildStatusCards() {
+    return Container(
+      height: 100,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildStatusCard('Pending', statusCounts['pending'] ?? 0, Colors.orange),
+          _buildStatusCard('Approved', statusCounts['approved'] ?? 0, Colors.green),
+          _buildStatusCard('Declined', statusCounts['declined'] ?? 0, Colors.red),
+          _buildStatusCard('Completed', statusCounts['completed'] ?? 0, Colors.blue),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusCard(String status, int count, Color color) {
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 2,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            status,
+            style: TextStyle(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            count.toString(),
+            style: TextStyle(
+              color: Colors.black87,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPendingHeader() {
     return Row(
       children: [
         Text(
-          'Pending Approvals',
+          'Total Requests',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -413,7 +499,7 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
           ),
         ),
       );
-      _fetchRequests();
+      _fetchRequests(); // This will update both the list and the counts
     }).catchError((error) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -515,6 +601,3 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
     );
   }
 }
-
-
-

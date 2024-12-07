@@ -10,82 +10,103 @@ class TruckMonitoringPage extends StatefulWidget {
 }
 
 class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
-  List<Map<String, dynamic>> filteredCollectors = [];
-  List<Map<String, dynamic>> allCollectors = [];
   final TextEditingController _searchController = TextEditingController();
-  MapController _mapController = MapController(); //Initialized in initState now
+  MapController _mapController = MapController();
   bool _isMapVisible = false;
   String? _selectedTruckId;
-  bool _isMapReady = false; // Added _isMapReady variable
+  bool _isMapReady = false;
+  bool _isCollectionZoneMapVisible = false;
 
   @override
   void initState() {
     super.initState();
-    _mapController = MapController(); // Initialize MapController in initState
+    _mapController = MapController();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
-    _mapController.dispose(); // Dispose of MapController
+    _mapController.dispose();
     super.dispose();
-  }
-
-  void _filterCollectors(String query) {
-    setState(() {
-      filteredCollectors = allCollectors.where((collector) {
-        return collector['truck_number'].toLowerCase().contains(query.toLowerCase()) ||
-            collector['name'].toLowerCase().contains(query.toLowerCase());
-      }).toList();
-    });
   }
 
   void _toggleMapVisibility([String? truckId]) {
     setState(() {
       _isMapVisible = !_isMapVisible;
+      _isCollectionZoneMapVisible = false;
       _selectedTruckId = _isMapVisible ? (truckId ?? _selectedTruckId) : null;
     });
 
     if (_isMapVisible && truckId != null) {
-      final selectedCollector = filteredCollectors.firstWhere((collector) => collector['id'] == truckId);
-      final LatLng position = _parseRealtimeLocation(selectedCollector['realtime_location']);
-
-      // Use Future.delayed to ensure the map is ready before moving
       Future.delayed(Duration(milliseconds: 100), () {
         if (_isMapReady) {
-          _mapController.move(position, 14.0);
+          _moveMapToTruck(truckId);
         }
       });
     }
   }
 
-  LatLng _getCenterPosition() {
-    if (filteredCollectors.isNotEmpty) {
-      Map<String, dynamic>? realtimeLocation = filteredCollectors[0]['realtime_location'];
-      if (realtimeLocation != null) {
-        try {
-          double latitude = realtimeLocation['latitude'];
-          double longitude = realtimeLocation['longitude'];
-          return LatLng(latitude, longitude);
-        } catch (e) {
-          debugPrint("Error parsing coordinates: $e");
+  void _toggleCollectionZoneMap([String? truckId]) {
+    setState(() {
+      _isCollectionZoneMapVisible = !_isCollectionZoneMapVisible;
+      _isMapVisible = false;
+      _selectedTruckId = _isCollectionZoneMapVisible ? (truckId ?? _selectedTruckId) : null;
+    });
+
+    if (_isCollectionZoneMapVisible && truckId != null) {
+      Future.delayed(Duration(milliseconds: 100), () {
+        if (_isMapReady) {
+          _moveMapToCollectionZone(truckId);
         }
-      }
+      });
     }
-    return LatLng(0, 0); // Default center if no valid coordinates
   }
 
-  LatLng _parseRealtimeLocation(Map<String, dynamic> realtimeLocation) {
-    double latitude = realtimeLocation['latitude'] ?? 0.0;
-    double longitude = realtimeLocation['longitude'] ?? 0.0;
+  void _moveMapToTruck(String truckId) {
+    FirebaseFirestore.instance
+        .collection('USERS_ACCOUNTS')
+        .doc(truckId)
+        .get()
+        .then((doc) {
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        final realtimeLocation = data['realtime_location'];
+        if (realtimeLocation != null) {
+          final position = _parseRealtimeLocation(realtimeLocation);
+          _mapController.move(position, 14.0);
+        }
+      }
+    });
+  }
+
+  void _moveMapToCollectionZone(String truckId) {
+    FirebaseFirestore.instance
+        .collection('USERS_ACCOUNTS')
+        .doc(truckId)
+        .get()
+        .then((doc) {
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        final collectionZone = data['collection_zone'];
+        if (collectionZone != null) {
+          final position = _parseCollectionZone(collectionZone);
+          _mapController.move(position, 14.0);
+        }
+      }
+    });
+  }
+
+  LatLng _parseRealtimeLocation(Map<String, dynamic>? location) {
+    double latitude = location?['latitude'] ?? 0.0;
+    double longitude = location?['longitude'] ?? 0.0;
     return LatLng(latitude, longitude);
   }
 
-  String _getDescriptiveLocation(Map<String, dynamic> realtimeLocation) {
-    double latitude = realtimeLocation['latitude'] ?? 0.0;
-    double longitude = realtimeLocation['longitude'] ?? 0.0;
-    // This is a placeholder. In a real application, you would use a geocoding service to get the actual location name.
-    return 'Lat: ${latitude.toStringAsFixed(2)}, Long: ${longitude.toStringAsFixed(2)}';
+  LatLng _parseCollectionZone(Map<String, dynamic>? collectionZone) {
+    if (collectionZone == null) return LatLng(0, 0);
+    final coordinates = collectionZone['coordinates'] as GeoPoint?;
+    if (coordinates == null) return LatLng(0, 0);
+    return LatLng(coordinates.latitude, coordinates.longitude);
   }
 
   @override
@@ -109,7 +130,7 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               controller: _searchController,
-              onChanged: _filterCollectors,
+              onChanged: (value) => setState(() {}),
               decoration: InputDecoration(
                 hintText: 'Search by truck number or collector name',
                 prefixIcon: Icon(Icons.search, color: Colors.grey),
@@ -133,23 +154,29 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
                   return Center(child: CircularProgressIndicator());
                 }
 
-                if (allCollectors.isEmpty) {
-                  allCollectors = snapshot.data!.docs.map((doc) {
-                    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-                    return {
-                      'id': doc.id,
-                      'name': '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}',
-                      'truck_number': data['truck_number'] ?? '',
-                      'availability': data['truck_availability'] ?? 'For Repair',
-                      'realtime_location': data['realtime_location'] ?? {'latitude': 0.0, 'longitude': 0.0},
-                    };
-                  }).toList();
-                  filteredCollectors = List.from(allCollectors);
-                }
+                List<Map<String, dynamic>> collectors = snapshot.data!.docs.map((doc) {
+                  Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+                  return {
+                    'id': doc.id,
+                    'name': '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}',
+                    'truck_number': data['truck_number'] ?? '',
+                    'availability': data['truck_availability'] ?? 'For Repair',
+                    'realtime_location': data['realtime_location'] ?? {'latitude': 0.0, 'longitude': 0.0},
+                    'collection_zone': data['collection_zone'] ?? {},
+                  };
+                }).toList();
+
+                collectors = collectors.where((collector) {
+                  final query = _searchController.text.toLowerCase();
+                  return collector['truck_number'].toLowerCase().contains(query) ||
+                      collector['name'].toLowerCase().contains(query);
+                }).toList();
 
                 return _isMapVisible
-                    ? _buildMap()
-                    : _buildTruckList();
+                    ? _buildMap(collectors)
+                    : _isCollectionZoneMapVisible
+                    ? _buildCollectionZoneMap(collectors)
+                    : _buildTruckList(collectors);
               },
             ),
           ),
@@ -158,11 +185,13 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
     );
   }
 
-  Widget _buildMap() {
+  Widget _buildMap(List<Map<String, dynamic>> collectors) {
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
-        initialCenter: _getCenterPosition(),
+        initialCenter: collectors.isNotEmpty
+            ? _parseRealtimeLocation(collectors[0]['realtime_location'])
+            : LatLng(0, 0),
         initialZoom: 14.0,
         onMapReady: () {
           setState(() {
@@ -176,7 +205,7 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
           subdomains: ['a', 'b', 'c'],
         ),
         MarkerLayer(
-          markers: filteredCollectors.map((collector) {
+          markers: collectors.map((collector) {
             LatLng position = _parseRealtimeLocation(collector['realtime_location']);
             return Marker(
               point: position,
@@ -193,7 +222,7 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
         PopupMarkerLayerWidget(
           options: PopupMarkerLayerOptions(
             markers: _selectedTruckId != null
-                ? filteredCollectors
+                ? collectors
                 .where((collector) => collector['id'] == _selectedTruckId)
                 .map((collector) {
               LatLng position = _parseRealtimeLocation(collector['realtime_location']);
@@ -211,7 +240,7 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
                 : [],
             popupDisplayOptions: PopupDisplayOptions(
               builder: (BuildContext context, Marker marker) {
-                final collector = filteredCollectors.firstWhere(
+                final collector = collectors.firstWhere(
                       (c) => _parseRealtimeLocation(c['realtime_location']) == marker.point,
                 );
                 return Card(
@@ -235,7 +264,86 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
     );
   }
 
-  Widget _buildTruckList() {
+  Widget _buildCollectionZoneMap(List<Map<String, dynamic>> collectors) {
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: collectors.isNotEmpty
+            ? _parseCollectionZone(collectors[0]['collection_zone'])
+            : LatLng(0, 0),
+        initialZoom: 14.0,
+        onMapReady: () {
+          setState(() {
+            _isMapReady = true;
+          });
+        },
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          subdomains: ['a', 'b', 'c'],
+        ),
+        MarkerLayer(
+          markers: collectors.map((collector) {
+            LatLng position = _parseCollectionZone(collector['collection_zone']);
+            return Marker(
+              point: position,
+              width: 40.0,
+              height: 40.0,
+              child: Icon(
+                Icons.location_on,
+                color: Colors.blue,
+                size: 40.0,
+              ),
+            );
+          }).toList(),
+        ),
+        PopupMarkerLayerWidget(
+          options: PopupMarkerLayerOptions(
+            markers: _selectedTruckId != null
+                ? collectors
+                .where((collector) => collector['id'] == _selectedTruckId)
+                .map((collector) {
+              LatLng position = _parseCollectionZone(collector['collection_zone']);
+              return Marker(
+                point: position,
+                width: 40.0,
+                height: 40.0,
+                child: Icon(
+                  Icons.location_on,
+                  color: Colors.red,
+                  size: 40.0,
+                ),
+              );
+            }).toList()
+                : [],
+            popupDisplayOptions: PopupDisplayOptions(
+              builder: (BuildContext context, Marker marker) {
+                final collector = collectors.firstWhere(
+                      (c) => _parseCollectionZone(c['collection_zone']) == marker.point,
+                );
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(collector['name'], style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text(collector['truck_number']),
+                        Text('Collection Zone'),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTruckList(List<Map<String, dynamic>> collectors) {
     return Column(
       children: [
         Padding(
@@ -246,22 +354,25 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
               Expanded(flex: 2, child: Center(child: Text('Truck Number', style: TextStyle(fontWeight: FontWeight.bold)))),
               Expanded(flex: 2, child: Center(child: Text('Status', style: TextStyle(fontWeight: FontWeight.bold)))),
               Expanded(flex: 3, child: Center(child: Text('Location', style: TextStyle(fontWeight: FontWeight.bold)))),
-              Expanded(flex: 2, child: Center(child: Text('Action', style: TextStyle(fontWeight: FontWeight.bold)))),
+              Expanded(flex: 3, child: Center(child: Text('Collection Zone', style: TextStyle(fontWeight: FontWeight.bold)))),
+              Expanded(flex: 4, child: Center(child: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold)))),
             ],
           ),
         ),
         Expanded(
           child: ListView.builder(
-            itemCount: filteredCollectors.length,
+            itemCount: collectors.length,
             itemBuilder: (context, index) {
-              final collector = filteredCollectors[index];
+              final collector = collectors[index];
               return TruckListItem(
                 id: collector['id'],
                 name: collector['name'],
                 truckNumber: collector['truck_number'],
                 availability: collector['availability'],
-                location: _getDescriptiveLocation(collector['realtime_location']),
+                location: collector['realtime_location']['descriptive_location'] ?? 'Unknown',
+                collectionZone: (collector['collection_zone'] as Map<String, dynamic>)['descriptive_location'] ?? 'Unknown',
                 onMapToggle: _toggleMapVisibility,
+                onCollectionZoneMapToggle: _toggleCollectionZoneMap,
               );
             },
           ),
@@ -277,7 +388,9 @@ class TruckListItem extends StatelessWidget {
   final String truckNumber;
   final String availability;
   final String location;
+  final String collectionZone;
   final Function(String?) onMapToggle;
+  final Function(String?) onCollectionZoneMapToggle;
 
   const TruckListItem({
     Key? key,
@@ -286,7 +399,9 @@ class TruckListItem extends StatelessWidget {
     required this.truckNumber,
     required this.availability,
     required this.location,
+    required this.collectionZone,
     required this.onMapToggle,
+    required this.onCollectionZoneMapToggle,
   }) : super(key: key);
 
   Color get availabilityColor {
@@ -360,17 +475,41 @@ class TruckListItem extends StatelessWidget {
               ),
             ),
             Expanded(
-              flex: 2,
-              child: ElevatedButton(
-                onPressed: () => onMapToggle(id),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+              flex: 3,
+              child: Text(
+                collectionZone,
+                style: const TextStyle(fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Expanded(
+              flex: 4,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => onMapToggle(id),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                    child: const Text('View Map'),
                   ),
-                ),
-                child: const Text('View Map'),
+                  ElevatedButton(
+                    onPressed: () => onCollectionZoneMapToggle(id),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                    child: const Text('View Zone'),
+                  ),
+                ],
               ),
             ),
           ],
@@ -379,5 +518,4 @@ class TruckListItem extends StatelessWidget {
     );
   }
 }
-
 

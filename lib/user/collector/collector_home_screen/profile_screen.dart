@@ -35,10 +35,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   TextEditingController _searchController = TextEditingController();
   LatLng? _selectedLocation;
   LatLng? _currentLocation;
-  bool isTruckToggle = false; // Track whether to show truck or driver availability
-  String? selectedAvailability; // Track the selected availability
+  bool isTruckToggle = false;
+  String? selectedAvailability;
 
-  // TODO: Replace with your actual Google Places API key
   static const String kGoogleApiKey = "AIzaSyD4UAtE_r8JjBbd0o5qfv3ZSPX_8xkNJ7c";
 
   @override
@@ -143,11 +142,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _buildProfileField(Icons.phone, 'Mobile Number', userData['phone_number'] ?? 'N/A'),
         _buildProfileField(Icons.cake, 'Date of Birth', userData['date_of_birth'] ?? 'N/A'),
         _buildProfileField(Icons.local_shipping, 'Truck Number', userData['truck_number'] ?? 'N/A'),
-        _buildProfileField(Icons.location_on, 'Collection Zone', userData['collection_zone'] ?? 'N/A'),
+        _buildProfileField(Icons.location_on, 'Collection Zone', _getCollectionZoneDescription(userData)),
         _buildProfileField(Icons.access_time, 'Created At', _formatTimestamp(userData['createdAt'])),
         _buildProfileField(Icons.verified_user, 'Status', userData['status'] ?? 'N/A'),
       ],
     );
+  }
+
+  String _getCollectionZoneDescription(Map<String, dynamic> userData) {
+    if (userData['collection_zone'] is Map<String, dynamic>) {
+      return userData['collection_zone']['descriptive_location'] ?? 'N/A';
+    }
+    return 'N/A';
   }
 
   Widget _buildAvailabilityToggle(Map<String, dynamic> userData) {
@@ -169,7 +175,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             SizedBox(height: 16),
-            // Availability Type Toggle
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -180,7 +185,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onChanged: (newValue) {
                       setState(() {
                         isTruckToggle = newValue!;
-                        selectedAvailability = null; // Reset the selected availability on toggle change
+                        selectedAvailability = null;
                       });
                     },
                     items: [
@@ -198,7 +203,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
             SizedBox(height: 16),
-            // Availability Status Dropdown
             DropdownButton<String>(
               isExpanded: true,
               value: selectedAvailability ?? (isTruckToggle
@@ -302,8 +306,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ],
     );
   }
-
-
 
   String _formatTimestamp(Timestamp? timestamp) {
     if (timestamp == null) return 'N/A';
@@ -443,7 +445,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (context) => LoginAsScreen()),
-                        (Route<dynamic> route) => false, // Clear all previous routes
+                        (Route<dynamic> route) => false,
                   );
                 },
                 child: Text(
@@ -617,7 +619,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     TextEditingController phoneController = TextEditingController(text: userData['phone_number'] ?? '');
     TextEditingController dobController = TextEditingController(text: userData['date_of_birth'] ?? '');
     TextEditingController truckNumberController = TextEditingController(text: userData['truck_number'] ?? '');
-    TextEditingController collectionZoneController = TextEditingController(text: userData['collection_zone'] ?? '');
+    TextEditingController collectionZoneController = TextEditingController(
+      text: userData['collection_zone'] is Map<String, dynamic>
+          ? '${userData['collection_zone']['coordinates'].latitude}, ${userData['collection_zone']['coordinates'].longitude}'
+          : '',
+    );
 
     showModalBottomSheet(
       context: context,
@@ -824,6 +830,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       String truckNumber,
       String collectionZone,
       ) async {
+    List<String> coordinates = collectionZone.split(',');
+    double latitude = double.parse(coordinates[0].trim());
+    double longitude = double.parse(coordinates[1].trim());
+
+    List<Placemark> placemarks = await placemarkFromCoordinates(latitude, longitude);
+    Placemark place = placemarks[0];
+    String descriptiveLocation = [
+      place.street ?? '',
+      place.subLocality ?? '',
+      place.locality ?? '',
+      place.subAdministrativeArea ?? '',
+      place.administrativeArea ?? '',
+      place.country ?? '',
+    ].where((element) => element.isNotEmpty).join(', ');
+
     Map<String, dynamic> updates = {
       'first_name': firstName,
       'middle_name': middleName,
@@ -831,7 +852,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'phone_number': phoneNumber,
       'date_of_birth': dateOfBirth,
       'truck_number': truckNumber,
-      'collection_zone': collectionZone,
+      'collection_zone': {
+        'coordinates': GeoPoint(latitude, longitude),
+        'descriptive_location': descriptiveLocation,
+      },
     };
 
     try {
@@ -857,7 +881,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showCollectionZoneMap(BuildContext context, TextEditingController controller) async {
     LatLng initialLocation;
 
-    // Try to parse the current collection zone
     if (controller.text.isNotEmpty) {
       List<String> coordinates = controller.text.split(',');
       if (coordinates.length == 2) {
@@ -870,7 +893,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
 
-    // If parsing fails, use the current location
     if (_selectedLocation == null) {
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
@@ -960,14 +982,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          backgroundColor: Colors.green.shade100, // Green background for the dialog
+          backgroundColor: Colors.green.shade100,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16), // Rounded corners
+            borderRadius: BorderRadius.circular(16),
           ),
           title: Text(
             "Mark Collection Zone",
             style: TextStyle(
-              color: Colors.green.shade800, // Darker green for title
+              color: Colors.green.shade800,
               fontWeight: FontWeight.bold,
               fontSize: 18,
             ),
@@ -975,7 +997,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           content: Text(
             "Do you want to mark this location as your collection zone?",
             style: TextStyle(
-              color: Colors.green.shade700, // Slightly lighter green for content
+              color: Colors.green.shade700,
               fontSize: 16,
             ),
           ),
@@ -985,7 +1007,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Navigator.of(context).pop();
               },
               style: TextButton.styleFrom(
-                foregroundColor: Colors.green.shade800, backgroundColor: Colors.transparent, // Transparent background
+                foregroundColor: Colors.green.shade800,
+                backgroundColor: Colors.transparent,
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               ),
               child: Text("No"),
@@ -999,7 +1022,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Navigator.of(context).pop();
               },
               style: TextButton.styleFrom(
-                foregroundColor: Colors.white, backgroundColor: Colors.green.shade700, // Green background for the "Yes" button
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.green.shade700,
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               ),
               child: Text("Yes"),
@@ -1009,7 +1033,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       },
     );
   }
-
 
   void _updateMarkers() {
     setState(() {
@@ -1042,3 +1065,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 }
+
+
+
+

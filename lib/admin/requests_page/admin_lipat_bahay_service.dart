@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class AdminLipatBahayServiceRequest extends StatefulWidget {
+  const AdminLipatBahayServiceRequest({Key? key}) : super(key: key);
+
   @override
   _AdminLipatBahayServiceRequestState createState() => _AdminLipatBahayServiceRequestState();
 }
@@ -12,6 +14,12 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
   String searchQuery = '';
   List<DocumentSnapshot> allRequests = [];
   List<DocumentSnapshot> filteredRequests = [];
+  Map<String, int> statusCounts = {
+    'pending': 0,
+    'approved': 0,
+    'declined': 0,
+    'completed': 0,
+  };
 
   @override
   void initState() {
@@ -28,6 +36,26 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
     setState(() {
       allRequests = snapshot.docs;
       filteredRequests = allRequests;
+      _updateStatusCounts();
+    });
+  }
+
+  void _updateStatusCounts() {
+    final counts = {
+      'pending': 0,
+      'approved': 0,
+      'declined': 0,
+      'completed': 0,
+    };
+
+    for (var request in allRequests) {
+      final data = request.data() as Map<String, dynamic>;
+      final status = data['status'] as String? ?? 'pending';
+      counts[status.toLowerCase()] = (counts[status.toLowerCase()] ?? 0) + 1;
+    }
+
+    setState(() {
+      statusCounts = counts;
     });
   }
 
@@ -48,7 +76,7 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
       backgroundColor: Colors.grey[50],
       body: SafeArea(
         child: Padding(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -63,7 +91,9 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
               SizedBox(height: 24),
               _buildSearchBar(),
               SizedBox(height: 24),
-              _buildPendingHeader(),
+              _buildStatusCards(),
+              SizedBox(height: 24),
+              _buildTotalRequestsHeader(),
               SizedBox(height: 16),
               Expanded(
                 child: _buildRequestList(),
@@ -100,11 +130,67 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
     );
   }
 
-  Widget _buildPendingHeader() {
+  Widget _buildStatusCards() {
+    return Container(
+      height: 100,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildStatusCard('Pending', statusCounts['pending'] ?? 0, Colors.orange),
+          _buildStatusCard('Approved', statusCounts['approved'] ?? 0, Colors.green),
+          _buildStatusCard('Declined', statusCounts['declined'] ?? 0, Colors.red),
+          _buildStatusCard('Completed', statusCounts['completed'] ?? 0, Colors.blue),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusCard(String status, int count, Color color) {
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 2,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            status,
+            style: TextStyle(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            count.toString(),
+            style: TextStyle(
+              color: Colors.black87,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTotalRequestsHeader() {
     return Row(
       children: [
         Text(
-          'Pending Approvals',
+          'Total Requests',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -390,12 +476,42 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
               imageUrl: profilePicUrl,
               fit: BoxFit.cover,
               placeholder: (context, url) => CircularProgressIndicator(),
-              errorWidget: (context, url, error) => Icon(Icons.error),
+              errorWidget: (context, url, error) => Icon(Icons.person),
             ),
           );
         },
       ),
     );
+  }
+
+  void updateRequestStatus(String docId, String status) {
+    FirebaseFirestore.instance
+        .collection('TRANSPORTATION_REQUESTS')
+        .doc(docId)
+        .update({'status': status}).then((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Request ${status.toUpperCase()}'),
+          backgroundColor: status == 'approved' ? Colors.green : Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      _fetchRequests(); // This will update both the list and the counts
+    }).catchError((error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update status: $error'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    });
   }
 
   void _showDetailsDialog(BuildContext context, Map<String, dynamic> data) {
@@ -494,38 +610,4 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
       ),
     );
   }
-
-  void updateRequestStatus(String requestId, String status) {
-    FirebaseFirestore.instance
-        .collection('TRANSPORTATION_REQUESTS')
-        .doc(requestId)
-        .update({'status': status}).then((_) {
-      // Show a confirmation message using SnackBar
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Request ${status.toUpperCase()}'),
-          backgroundColor: status == 'approved' ? Colors.green : Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-      // Refresh the requests
-      _fetchRequests();
-    }).catchError((error) {
-      // Show an error message if the update fails
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update status: $error'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-    });
-  }
 }
-

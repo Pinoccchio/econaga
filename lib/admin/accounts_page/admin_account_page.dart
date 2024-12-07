@@ -8,6 +8,8 @@ import 'location_selection_page.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class AdminAccountPage extends StatefulWidget {
   @override
@@ -48,6 +50,34 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
       node.dispose();
     }
     super.dispose();
+  }
+
+  Future<String> getDescriptiveLocation(double lat, double lon) async {
+    final url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lon&zoom=18&addressdetails=1';
+    final response = await http.get(Uri.parse(url));
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      final address = data['address'];
+
+      // Get the address components including road and suburb
+      final road = address['road'] ?? '';
+      final suburb = address['suburb'] ?? '';
+      final city = address['city'] ?? address['town'] ?? address['village'] ?? '';
+      final state = address['state'] ?? '';
+      final country = address['country'] ?? '';
+      final postcode = address['postcode'] ?? '';
+
+      // Return the full address directly, joining parts as needed
+      return '${road.isNotEmpty ? road + ', ' : ''}'
+          '${suburb.isNotEmpty ? suburb + ', ' : ''}'
+          '${city.isNotEmpty ? city + ', ' : ''}'
+          '${state.isNotEmpty ? state + ', ' : ''}'
+          '${country.isNotEmpty ? country + ', ' : ''}'
+          '${postcode.isNotEmpty ? postcode : ''}'.trim();
+    } else {
+      throw Exception('Failed to get location description');
+    }
   }
 
   @override
@@ -491,12 +521,13 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
           'status': 'active',
         };
 
-        if (selectedRole == 'collector') {
+        if (selectedRole == 'collector' && selectedLocation != null) {
+          final descriptiveLocation = await getDescriptiveLocation(selectedLocation!.latitude, selectedLocation!.longitude);
+          userData['collection_zone'] = {
+            'coordinates': GeoPoint(selectedLocation!.latitude, selectedLocation!.longitude),
+            'descriptive_location': descriptiveLocation,
+          };
           userData['truck_number'] = truckNumberController.text.trim();
-          userData['location'] = selectedLocation != null
-              ? GeoPoint(selectedLocation!.latitude, selectedLocation!.longitude)
-              : null;
-          userData['collection_zone'] = addressController.text.trim();
         }
 
         await FirebaseFirestore.instance.collection('USERS_ACCOUNTS').doc(userCredential.user!.uid).set(userData);
@@ -684,14 +715,14 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
                       _buildDetailRow('Role', accountData['role']),
                       if (accountData['role'] == 'collector') ...[
                         _buildDetailRow('Truck Number', accountData['truck_number']),
-                        _buildDetailRow('Collection Zone', accountData['collection_zone']),
+                        _buildDetailRow('Collection Zone', accountData['collection_zone']['descriptive_location']),
                       ],
                       _buildDetailRow('Status', accountData['status'] ?? 'Active'),
                       SizedBox(height: 20),
                       if (accountData['idImageUrl'] != null)
                         Container(
-                          width: double.infinity, // Makes the image stretch to fit within the parent
-                          height: 200, // Adjustable height
+                          width: double.infinity,
+                          height: 200,
                           decoration: BoxDecoration(
                             border: Border.all(color: Colors.grey),
                             borderRadius: BorderRadius.circular(10),
@@ -700,15 +731,15 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
                             borderRadius: BorderRadius.circular(10),
                             child: Image.network(
                               accountData['idImageUrl'],
-                              fit: BoxFit.contain, // Ensures the full image is visible
+                              fit: BoxFit.contain,
                             ),
                           ),
                         ),
                       SizedBox(height: 10),
                       if (accountData['selfieImageUrl'] != null)
                         Container(
-                          width: double.infinity, // Makes the image stretch to fit within the parent
-                          height: 200, // Adjustable height
+                          width: double.infinity,
+                          height: 200,
                           decoration: BoxDecoration(
                             border: Border.all(color: Colors.grey),
                             borderRadius: BorderRadius.circular(10),
@@ -717,11 +748,10 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
                             borderRadius: BorderRadius.circular(10),
                             child: Image.network(
                               accountData['selfieImageUrl'],
-                              fit: BoxFit.contain, // Ensures the full image is visible
+                              fit: BoxFit.contain,
                             ),
                           ),
                         ),
-
                     ],
                   ),
                 ),

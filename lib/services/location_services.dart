@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geocoding/geocoding.dart';
 
 class LocationService extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -31,10 +32,9 @@ class LocationService extends ChangeNotifier {
         throw Exception('Location permissions are permanently denied');
       }
 
-      // Updated usage of getPositionStream with no LocationSettings required
       Geolocator.getPositionStream(
-        desiredAccuracy: LocationAccuracy.high, // Set desired accuracy level
-        distanceFilter: 10, // Update every 10 meters
+        desiredAccuracy: LocationAccuracy.high,
+        distanceFilter: 10,
       ).listen((Position position) {
         _updateLocation(position);
       });
@@ -49,20 +49,47 @@ class LocationService extends ChangeNotifier {
     _userId = null;
   }
 
+  Future<String> _getDescriptiveLocation(Position position) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        List<String> locationParts = [
+          place.street ?? '',
+          place.subLocality ?? '',
+          place.locality ?? '',
+          place.subAdministrativeArea ?? '',
+          place.administrativeArea ?? '',
+          place.country ?? '',
+        ].where((part) => part.isNotEmpty).toList();
+
+        return locationParts.join(', ');
+      }
+    } catch (e) {
+      print('Error getting descriptive location: $e');
+    }
+    return 'Unknown Location';
+  }
+
   Future<void> _updateLocation(Position position) async {
     if (!_isTracking || _userId == null) return;
 
     try {
+      String descriptiveLocation = await _getDescriptiveLocation(position);
       await _firestore.collection('USERS_ACCOUNTS').doc(_userId).update({
-          'realtime_location': {
+        'realtime_location': {
           'latitude': position.latitude,
           'longitude': position.longitude,
+          'descriptive_location': descriptiveLocation,
           'timestamp': FieldValue.serverTimestamp(),
         }
       });
 
-      // Print the updated location
-      print('Location sent: Latitude: ${position.latitude}, Longitude: ${position.longitude}');
+      print('Location sent: $descriptiveLocation');
+      print('Coordinates: Latitude: ${position.latitude}, Longitude: ${position.longitude}');
     } catch (e) {
       print('Error updating location: $e');
     }

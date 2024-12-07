@@ -12,10 +12,12 @@ class ClientHomeScreenContainer extends StatefulWidget {
   ClientHomeScreenContainer({required this.userId});
 
   @override
-  _ClientHomeScreenContainerState createState() => _ClientHomeScreenContainerState();
+  _ClientHomeScreenContainerState createState() =>
+      _ClientHomeScreenContainerState();
 }
 
-class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
+class _ClientHomeScreenContainerState
+    extends State<ClientHomeScreenContainer> {
   int _selectedIndex = 2;
   int _notificationCount = 0;
   final List<Widget> _pages = [];
@@ -34,13 +36,14 @@ class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
   }
 
   void _listenToNotifications() {
+    // Fetch and calculate total pending notifications across collections
     FirebaseFirestore.instance
         .collectionGroup('GARBAGE_REQUESTS')
         .where('user_id', isEqualTo: widget.userId)
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .listen((snapshot) {
-      _updateNotificationCount(snapshot.docs.length);
+      _updateNotificationCount();
     });
 
     FirebaseFirestore.instance
@@ -49,7 +52,7 @@ class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .listen((snapshot) {
-      _updateNotificationCount(snapshot.docs.length);
+      _updateNotificationCount();
     });
 
     FirebaseFirestore.instance
@@ -58,21 +61,45 @@ class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .listen((snapshot) {
-      _updateNotificationCount(snapshot.docs.length);
+      _updateNotificationCount();
     });
   }
 
-  void _updateNotificationCount(int count) {
-    setState(() {
-      _notificationCount += count;
-    });
+  Future<void> _updateNotificationCount() async {
+    try {
+      final garbageRequests = await FirebaseFirestore.instance
+          .collectionGroup('GARBAGE_REQUESTS')
+          .where('user_id', isEqualTo: widget.userId)
+          .where('status', isEqualTo: 'pending')
+          .get();
+
+      final burialRequests = await FirebaseFirestore.instance
+          .collectionGroup('BURIAL_REQUESTS')
+          .where('user_id', isEqualTo: widget.userId)
+          .where('status', isEqualTo: 'pending')
+          .get();
+
+      final transportationRequests = await FirebaseFirestore.instance
+          .collectionGroup('TRANSPORTATION_REQUESTS')
+          .where('user_id', isEqualTo: widget.userId)
+          .where('status', isEqualTo: 'pending')
+          .get();
+
+      setState(() {
+        _notificationCount = garbageRequests.docs.length +
+            burialRequests.docs.length +
+            transportationRequests.docs.length;
+      });
+    } catch (e) {
+      print('Error updating notification count: $e');
+    }
   }
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
       if (index == 1) {
-        _notificationCount = 0;
+        _notificationCount = 0; // Clear notification count when visiting Notifications page
       }
     });
   }
@@ -95,13 +122,17 @@ class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
         onTap: _onItemTapped,
         items: [
           BottomNavigationBarItem(
-            icon: Icon(_selectedIndex == 0 ? Icons.request_page : Icons.request_page_outlined),
+            icon: Icon(_selectedIndex == 0
+                ? Icons.request_page
+                : Icons.request_page_outlined),
             label: 'Request',
           ),
           BottomNavigationBarItem(
             icon: Stack(
               children: [
-                Icon(_selectedIndex == 1 ? Icons.notifications : Icons.notifications_outlined),
+                Icon(_selectedIndex == 1
+                    ? Icons.notifications
+                    : Icons.notifications_outlined),
                 if (_notificationCount > 0)
                   Positioned(
                     right: 0,
@@ -135,11 +166,15 @@ class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
             label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: Icon(_selectedIndex == 3 ? Icons.chat_bubble : Icons.chat_bubble_outline),
+            icon: Icon(_selectedIndex == 3
+                ? Icons.chat_bubble
+                : Icons.chat_bubble_outline),
             label: 'Complaints',
           ),
           BottomNavigationBarItem(
-            icon: Icon(_selectedIndex == 4 ? Icons.person : Icons.person_outline),
+            icon: Icon(_selectedIndex == 4
+                ? Icons.person
+                : Icons.person_outline),
             label: 'Account',
           ),
         ],
@@ -157,4 +192,3 @@ class _ClientHomeScreenContainerState extends State<ClientHomeScreenContainer> {
     );
   }
 }
-
