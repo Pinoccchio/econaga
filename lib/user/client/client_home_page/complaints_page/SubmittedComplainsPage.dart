@@ -1,78 +1,122 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../../../designs/app_colors.dart';
-import 'ComplaintDetailPage.dart';  // Ensure this path is correct
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../../../designs/app_colors.dart';
+import 'ComplaintDetailPage.dart';
 
-class SubmittedComplaintsPage extends StatefulWidget {
+class SubmittedComplaintsPage extends StatelessWidget {
   final String userId;
 
   SubmittedComplaintsPage({required this.userId});
 
   @override
-  _SubmittedComplaintsPageState createState() =>
-      _SubmittedComplaintsPageState();
-}
-
-class _SubmittedComplaintsPageState extends State<SubmittedComplaintsPage> {
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         backgroundColor: AppColors.secondaryGreen,
-        title: Text('SUBMITTED COMPLAINTS'),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+        title: Text(
+          'Your Complaints',
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
         ),
+        elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collection('COMPLAINTS')
-            .where('userId', isEqualTo: widget.userId)
+            .collection('complaints')
+            .where('userId', isEqualTo: userId)
+            .orderBy('lastMessageTimestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator(color: AppColors.secondaryGreen));
           }
 
-          var complaints = snapshot.data!.docs;
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          var complaints = snapshot.data?.docs ?? [];
 
           if (complaints.isEmpty) {
-            return Center(child: Text('No complaints submitted yet.'));
+            return Center(
+              child: Text(
+                'No complaints submitted yet.',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+              ),
+            );
           }
 
           return ListView.builder(
             itemCount: complaints.length,
             itemBuilder: (context, index) {
               var complaint = complaints[index];
-              var complaintId = complaint.id;
+              var complaintData = complaint.data() as Map<String, dynamic>;
 
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundImage: AssetImage(
-                      'lib/components/assets/images/official_logo.png'),
+              return Card(
+                margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                title: Text('To: Admin'),
-                subtitle: Text(complaint['complaint']),
-                trailing: Text(
-                    'Submitted: ${_parseTimestamp(complaint['timestamp'])}'),
-                onTap: () {
-                  /*
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ComplaintDetailPage(
-                        complaintId: complaintId,
-                        userId: widget.userId,
-                      ),
+                child: ListTile(
+                  contentPadding: EdgeInsets.all(16),
+                  leading: CircleAvatar(
+                    backgroundColor: AppColors.secondaryGreen,
+                    child: Icon(Icons.chat, color: Colors.white),
+                  ),
+                  title: Text(
+                    'Complaint to Admin',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: Colors.black87,
                     ),
-                  );
-
-                   */
-                },
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(height: 4),
+                      Text(
+                        complaintData['lastMessage'] ?? 'No messages',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Last update: ${_formatTimestamp(complaintData['lastMessageTimestamp'])}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                  trailing: Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.secondaryGreen),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ComplaintDetailPage(
+                          complaintId: complaint.id,
+                          userId: userId,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               );
             },
           );
@@ -81,14 +125,16 @@ class _SubmittedComplaintsPageState extends State<SubmittedComplaintsPage> {
     );
   }
 
-  String _parseTimestamp(dynamic timestamp) {
-    if (timestamp == null) return 'N/A';
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp == null) return '';
     try {
-      return DateFormat('MMM d, y HH:mm')
-          .format((timestamp as Timestamp).toDate());
+      DateTime date = DateTime.fromMillisecondsSinceEpoch(timestamp);
+      return DateFormat('MMM d, y h:mm a').format(date); // Format: Dec 9, 2024 3:45 PM
     } catch (e) {
-      print('Error parsing timestamp: $e');
-      return 'Invalid Date';
+      print('Error formatting timestamp: $e');
+      return '';
     }
   }
 }
+
+

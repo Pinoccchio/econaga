@@ -47,38 +47,39 @@ class _AdminHomePageState extends State<AdminHomePage> {
           },
         ),
         actions: [
-          Stack(
-            children: [
-              IconButton(
-                icon: Icon(Icons.notifications, color: Colors.green),
-                onPressed: () {
-                  // Notification functionality here
-                },
-                splashColor: Colors.grey.withOpacity(0.3),
-                highlightColor: Colors.grey.withOpacity(0.1),
-              ),
-              Positioned(
-                right: 5,
-                top: 5,
-                child: Container(
-                  padding: EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: Colors.blue,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  constraints: BoxConstraints(
-                    minWidth: 18,
-                    minHeight: 18,
-                  ),
-                  child: Text(
-                    '20',
-                    style: TextStyle(color: Colors.white, fontSize: 12),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ],
-          ),
+          // Notification button is temporarily hidden
+          // Stack(
+          //   children: [
+          //     IconButton(
+          //       icon: Icon(Icons.notifications, color: Colors.green),
+          //       onPressed: () {
+          //         // Notification functionality here
+          //       },
+          //       splashColor: Colors.grey.withOpacity(0.3),
+          //       highlightColor: Colors.grey.withOpacity(0.1),
+          //     ),
+          //     Positioned(
+          //       right: 5,
+          //       top: 5,
+          //       child: Container(
+          //         padding: EdgeInsets.all(2),
+          //         decoration: BoxDecoration(
+          //           color: Colors.blue,
+          //           borderRadius: BorderRadius.circular(10),
+          //         ),
+          //         constraints: BoxConstraints(
+          //           minWidth: 18,
+          //           minHeight: 18,
+          //         ),
+          //         child: Text(
+          //           '20',
+          //           style: TextStyle(color: Colors.white, fontSize: 12),
+          //           textAlign: TextAlign.center,
+          //         ),
+          //       ),
+          //     ),
+          //   ],
+          // ),
           SizedBox(width: 10),
           CircleAvatar(
             backgroundImage: AssetImage('lib/components/assets/images/official_logo.png'),
@@ -177,6 +178,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       ),
     );
   }
+
 
 
   Widget _buildListTile(String title, IconData? icon, String page, {Color color = Colors.green}) {

@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'dart:math';
+import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../../../designs/app_colors.dart';
 
 class ComplaintsOverview extends StatefulWidget {
   @override
@@ -13,399 +11,560 @@ class ComplaintsOverview extends StatefulWidget {
 
 class _ComplaintsOverviewState extends State<ComplaintsOverview> {
   String? selectedComplaintId;
-  TextEditingController replyController = TextEditingController();
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('COMPLAINTS').snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
-
-        int totalComplaints = snapshot.data!.docs.length;
-        int readComplaints = snapshot.data!.docs.where((doc) {
-          return (doc.data() as Map<String, dynamic>)['status'] == 'read';
-        }).length;
-        int unreadComplaints = totalComplaints - readComplaints;
-
-        return Column(
-          children: [
-            Text(
-              'Complaints Overview',
-              style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 20),
-            Container(
-              height: 200,
-              child: PieChart(
-                PieChartData(
-                  sections: [
-                    PieChartSectionData(
-                      color: Colors.blue,
-                      value: readComplaints.toDouble(),
-                      title: '$readComplaints',
-                      radius: 50,
-                      titleStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                    PieChartSectionData(
-                      color: Colors.green,
-                      value: unreadComplaints.toDouble(),
-                      title: '$unreadComplaints',
-                      radius: 60,
-                      titleStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                  centerSpaceRadius: 40,
-                  sectionsSpace: 0,
-                ),
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        title: Text('Account Management', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.white)),
+        backgroundColor: Colors.green.shade700,
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('complaints')
+            .orderBy('lastMessageTimestamp', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(
+              child: CircularProgressIndicator(
+                color: AppColors.secondaryGreen,
               ),
-            ),
-            SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildLegend(Colors.blue, 'Read ($readComplaints)'),
-                SizedBox(width: 20),
-                _buildLegend(Colors.green, 'Unread ($unreadComplaints)'),
-              ],
-            ),
-            SizedBox(height: 20),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 1,
-                    child: ComplaintsList(
-                      onComplaintSelected: (complaintId) {
-                        setState(() {
-                          selectedComplaintId = complaintId;
-                        });
-                      },
-                    ),
-                  ),
-                  SizedBox(width: 20),
-                  Expanded(
-                    flex: 1,
-                    child: selectedComplaintId != null
-                        ? ComplaintDetail(
-                      complaintId: selectedComplaintId!,
-                      replyController: replyController,
-                      onReplySent: () {
-                        setState(() {
-                          selectedComplaintId = null;
-                        });
-                      },
-                    )
-                        : Center(child: Text('Select a complaint to view details')),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildLegend(Color color, String label) {
-    return Row(
-      children: [
-        Container(
-          width: 16,
-          height: 16,
-          color: color,
-        ),
-        SizedBox(width: 4),
-        Text(label),
-      ],
-    );
-  }
-}
-
-class ComplaintsList extends StatelessWidget {
-  final Function(String) onComplaintSelected;
-
-  ComplaintsList({required this.onComplaintSelected});
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('COMPLAINTS').orderBy('timestamp', descending: true).snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return CircularProgressIndicator();
-
-        if (snapshot.data!.docs.isEmpty) {
-          return Center(
-            child: Text(
-              'No complaints yet',
-              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w500),
-            ),
-          );
-        }
-
-        return ListView(
-          children: snapshot.data!.docs.map((doc) {
-            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-            bool isRead = data['status'] == 'read';
-            String userId = data['userId'];
-
-            return ListTile(
-              leading: FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance.collection('USERS_ACCOUNTS').doc(userId).get(),
-                builder: (context, userSnapshot) {
-                  if (userSnapshot.connectionState == ConnectionState.waiting) {
-                    return CircularProgressIndicator();
-                  }
-                  if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
-                    return CircleAvatar(child: Icon(Icons.person));
-                  }
-
-                  final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-                  String profilePicUrl = userData['selfieImageUrl'] as String? ?? '';
-
-                  return ClipOval(
-                    child: profilePicUrl.isNotEmpty
-                        ? CachedNetworkImage(
-                      imageUrl: profilePicUrl,
-                      placeholder: (context, url) => CircularProgressIndicator(),
-                      errorWidget: (context, url, error) => Icon(Icons.person),
-                      width: 40,
-                      height: 40,
-                      fit: BoxFit.cover,
-                    )
-                        : CircleAvatar(child: Icon(Icons.person)),
-                  );
-                },
-              ),
-              title: Text('${data['first_name'] ?? ''} ${data['last_name'] ?? ''}'),
-              subtitle: Text(data['complaint']?.toString().substring(0, min(50, data['complaint']?.toString().length ?? 0)) ?? 'No complaint text'),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(_formatTimestamp(data['timestamp'])),
-                  SizedBox(width: 8),
-                  Icon(isRead ? Icons.mark_email_read : Icons.mark_email_unread, color: isRead ? Colors.green : Colors.red),
-                ],
-              ),
-              onTap: () => onComplaintSelected(doc.id),
             );
-          }).toList(),
-        );
-      },
-    );
-  }
+          }
 
-  String _formatTimestamp(dynamic timestamp) {
-    if (timestamp == null) return 'N/A';
-    try {
-      return DateFormat('MMM d, y HH:mm').format((timestamp as Timestamp).toDate());
-    } catch (e) {
-      print('Error formatting timestamp: $e');
-      return 'Invalid Date';
-    }
-  }
-}
-
-class ComplaintDetail extends StatelessWidget {
-  final String complaintId;
-  final TextEditingController replyController;
-  final VoidCallback onReplySent;
-
-  ComplaintDetail({
-    required this.complaintId,
-    required this.replyController,
-    required this.onReplySent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('COMPLAINTS').doc(complaintId).snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return CircularProgressIndicator();
-
-        Map<String, dynamic> data = snapshot.data!.data() as Map<String, dynamic>;
-        bool isRead = data['status'] == 'read';
-        String userId = data['userId'];
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Complaint Details',
-                  style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                ElevatedButton.icon(
-                  icon: Icon(isRead ? Icons.mark_email_unread : Icons.mark_email_read),
-                  label: Text(isRead ? 'Mark as Unread' : 'Mark as Read'),
-                  onPressed: () => _toggleReadStatus(complaintId, isRead),
-                ),
-              ],
-            ),
-            SizedBox(height: 10),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.all(16),
-                children: [
-                  FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance.collection('USERS_ACCOUNTS').doc(userId).get(),
-                    builder: (context, userSnapshot) {
-                      if (userSnapshot.connectionState == ConnectionState.waiting) {
-                        return CircularProgressIndicator();
-                      }
-                      if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
-                        return _buildMessageBubble(
-                          '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}',
-                          data['complaint'] ?? 'No complaint text',
-                          _parseTimestamp(data['timestamp']),
-                          isUser: true,
-                        );
-                      }
-
-                      final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-                      String profilePicUrl = userData['selfieImageUrl'] as String? ?? '';
-
-                      return _buildMessageBubble(
-                        '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}',
-                        data['complaint'] ?? 'No complaint text',
-                        _parseTimestamp(data['timestamp']),
-                        isUser: true,
-                        profilePicUrl: profilePicUrl.isNotEmpty ? NetworkImage(profilePicUrl) : null,
-                      );
-                    },
-                  ),
-                  if (data['adminReply'] != null)
-                    _buildMessageBubble(
-                      'Admin',
-                      data['adminReply'],
-                      _parseTimestamp(data['adminReplyTimestamp']),
-                      isUser: false,
-                      profilePicUrl: AssetImage('lib/components/assets/images/official_logo.png'),
-                    ),
-                ],
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                'Error: ${snapshot.error}',
+                style: TextStyle(color: Colors.red),
               ),
-            ),
-            Padding(
-              padding: EdgeInsets.all(8.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: replyController,
-                      decoration: InputDecoration(
-                        labelText: 'Type your reply',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      _sendReply(complaintId, replyController.text);
-                      replyController.clear();
-                      onReplySent();
-                    },
-                    child: Text('Send'),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
+            );
+          }
 
-  void _toggleReadStatus(String complaintId, bool isRead) {
-    FirebaseFirestore.instance.collection('COMPLAINTS').doc(complaintId).update({
-      'status': isRead ? 'unread' : 'read',
-    });
-  }
+          var complaints = snapshot.data?.docs ?? [];
 
-  void _sendReply(String complaintId, String reply) {
-    FirebaseFirestore.instance.collection('COMPLAINTS').doc(complaintId).update({
-      'adminReply': reply,
-      'adminReplyTimestamp': FieldValue.serverTimestamp(),
-    });
-  }
-
-  String _parseTimestamp(dynamic timestamp) {
-    if (timestamp == null) return 'N/A';
-    try {
-      return DateFormat('MMM d, y HH:mm').format((timestamp as Timestamp).toDate());
-    } catch (e) {
-      print('Error parsing timestamp: $e');
-      return 'Invalid Date';
-    }
-  }
-
-  Widget _buildMessageBubble(
-      String senderName,
-      String message,
-      String timestamp, {
-        bool isUser = true,
-        ImageProvider? profilePicUrl,
-      }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipOval(
-          child: profilePicUrl != null
-              ? profilePicUrl is NetworkImage
-              ? CachedNetworkImage(
-            imageUrl: (profilePicUrl as NetworkImage).url,
-            placeholder: (context, url) => CircularProgressIndicator(),
-            errorWidget: (context, url, error) => Icon(Icons.person),
-            width: 40,
-            height: 40,
-            fit: BoxFit.cover,
-          )
-              : Image(
-            image: profilePicUrl,
-            width: 40,
-            height: 40,
-            fit: BoxFit.cover,
-          )
-              : CircleAvatar(child: Icon(Icons.person)),
-        ),
-        SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          return Row(
             children: [
-              Text(
-                senderName,
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 4),
               Container(
-                padding: EdgeInsets.all(12),
+                width: 350,
                 decoration: BoxDecoration(
-                  color: isUser ? Colors.blue[100] : Colors.grey[300],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(message),
-                    SizedBox(height: 4),
-                    Text(
-                      timestamp,
-                      style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey),
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.1),
+                      spreadRadius: 0,
+                      blurRadius: 10,
                     ),
                   ],
+                ),
+                child: _buildComplaintsList(complaints),
+              ),
+              Expanded(
+                child: selectedComplaintId != null
+                    ? _buildComplaintDetail()
+                    : Center(
+                  child: Text(
+                    'Select a complaint to view details',
+                    style: GoogleFonts.poppins(
+                      color: Colors.grey,
+                      fontSize: 16,
+                    ),
+                  ),
                 ),
               ),
             ],
-          ),
-        ),
-      ],
+          );
+        },
+      ),
     );
   }
+
+  Widget _buildComplaintsList(List<QueryDocumentSnapshot> complaints) {
+    return ListView.separated(
+      itemCount: complaints.length,
+      padding: EdgeInsets.symmetric(vertical: 8),
+      separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[200]),
+      itemBuilder: (context, index) {
+        var complaint = complaints[index];
+        var complaintData = complaint.data() as Map<String, dynamic>;
+        bool isSelected = selectedComplaintId == complaint.id;
+
+        return InkWell(
+          onTap: () {
+            setState(() {
+              selectedComplaintId = complaint.id;
+            });
+          },
+          child: Container(
+            color: isSelected ? Colors.grey[100] : Colors.white,
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FutureBuilder<DocumentSnapshot>(
+                  future: FirebaseFirestore.instance
+                      .collection('USERS_ACCOUNTS')
+                      .doc(complaintData['userId'])
+                      .get(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return CircularProgressIndicator();
+                    }
+                    if (snapshot.hasError || !snapshot.hasData) {
+                      return CircleAvatar(
+                        radius: 20,
+                        backgroundColor: _getAvatarColor(complaintData['email'] ?? ''),
+                        child: Text(
+                          _getInitials(complaintData['email'] ?? ''),
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      );
+                    }
+                    var userData = snapshot.data!.data() as Map<String, dynamic>?;
+                    String? profileImageUrl = userData?['selfieImageUrl'];
+                    return CircleAvatar(
+                      radius: 20,
+                      backgroundImage: profileImageUrl != null
+                          ? NetworkImage(profileImageUrl)
+                          : null,
+                      child: profileImageUrl == null
+                          ? Text(
+                        _getInitials(complaintData['email'] ?? ''),
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      )
+                          : null,
+                    );
+                  },
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              complaintData['email'] ?? 'No email',
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: Colors.black87,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            _formatTimestamp(complaintData['lastMessageTimestamp']),
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        complaintData['lastMessage'] ?? complaintData['complaint'] ?? 'No message',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                          height: 1.4,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _getInitials(String email) {
+    if (email.isEmpty) return '';
+    final parts = email.split('@');
+    if (parts.isEmpty) return '';
+    final name = parts[0];
+    if (name.isEmpty) return '';
+    return name.substring(0, min(2, name.length)).toUpperCase();
+  }
+
+  Color _getAvatarColor(String email) {
+    final colors = [
+      Colors.teal,
+      Colors.purple,
+      Colors.orange,
+      Colors.blue,
+      Colors.pink,
+      Colors.indigo
+    ];
+    return colors[email.hashCode.abs() % colors.length];
+  }
+
+  int min(int a, int b) => a < b ? a : b;
+
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp == null) return '';
+    try {
+      DateTime date = DateTime.fromMillisecondsSinceEpoch(timestamp);
+      return DateFormat('MMM d, y h:mm a').format(date); // Format: Dec 9, 2024 3:45 PM
+    } catch (e) {
+      print('Error formatting timestamp: $e');
+      return '';
+    }
+  }
+
+  Widget _buildComplaintDetail() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('complaints')
+          .doc(selectedComplaintId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator(color: AppColors.secondaryGreen));
+        }
+
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return Center(child: Text('Complaint not found'));
+        }
+
+        var complaintData = snapshot.data!.data() as Map<String, dynamic>;
+        var messages = complaintData['messages'] as List<dynamic>? ?? [];
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              bottomLeft: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            children: [
+              _buildComplaintHeader(complaintData),
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding: EdgeInsets.all(16),
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    var message = messages[index] as Map<String, dynamic>;
+                    return _buildMessageBubble(
+                      message['senderId'] == 'admin' ? 'Admin' : complaintData['email'] ?? 'User',
+                      message['content'],
+                      _formatTimestamp(message['timestamp']),
+                      isAdmin: message['senderId'] == 'admin',
+                      userId: complaintData['userId'],
+                    );
+                  },
+                ),
+              ),
+              _buildMessageInput(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildComplaintHeader(Map<String, dynamic> complaintData) {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            offset: Offset(0, 2),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance
+                .collection('USERS_ACCOUNTS')
+                .doc(complaintData['userId'])
+                .get(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return CircularProgressIndicator();
+              }
+              if (snapshot.hasError || !snapshot.hasData) {
+                return CircleAvatar(
+                  radius: 24,
+                  backgroundColor: _getAvatarColor(complaintData['email'] ?? ''),
+                  child: Text(
+                    _getInitials(complaintData['email'] ?? ''),
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                );
+              }
+              var userData = snapshot.data!.data() as Map<String, dynamic>?;
+              String? profileImageUrl = userData?['selfieImageUrl'];
+              return CircleAvatar(
+                radius: 24,
+                backgroundImage: profileImageUrl != null
+                    ? NetworkImage(profileImageUrl)
+                    : null,
+                child: profileImageUrl == null
+                    ? Text(
+                  _getInitials(complaintData['email'] ?? ''),
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                )
+                    : null,
+              );
+            },
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  complaintData['email'] ?? 'No email',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Complaint: ${complaintData['complaint'] ?? 'No details'}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(
+      String sender,
+      String message,
+      String timestamp,
+      {required bool isAdmin, required String userId}
+      ) {
+    return Align(
+      alignment: isAdmin ? Alignment.centerRight : Alignment.centerLeft,
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: isAdmin ? MainAxisAlignment.end : MainAxisAlignment.start,
+          children: [
+            if (!isAdmin) ...[
+              FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('USERS_ACCOUNTS')
+                    .doc(userId)
+                    .get(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return CircularProgressIndicator();
+                  }
+                  if (snapshot.hasError || !snapshot.hasData) {
+                    return CircleAvatar(
+                      radius: 16,
+                      backgroundColor: _getAvatarColor(sender),
+                      child: Text(
+                        _getInitials(sender),
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    );
+                  }
+                  var userData = snapshot.data!.data() as Map<String, dynamic>?;
+                  String? profileImageUrl = userData?['selfieImageUrl'];
+                  return CircleAvatar(
+                    radius: 16,
+                    backgroundImage: profileImageUrl != null
+                        ? NetworkImage(profileImageUrl)
+                        : null,
+                    child: profileImageUrl == null
+                        ? Text(
+                      _getInitials(sender),
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    )
+                        : null,
+                  );
+                },
+              ),
+              SizedBox(width: 8),
+            ],
+            Container(
+              constraints: BoxConstraints(maxWidth: 400),
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isAdmin ? AppColors.secondaryGreen.withOpacity(0.1) : Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    timestamp,
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isAdmin) ...[
+              SizedBox(width: 8),
+              CircleAvatar(
+                radius: 16,
+                backgroundImage: AssetImage('lib/components/assets/images/official_logo.png'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageInput() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            offset: Offset(0, -2),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _messageController,
+              decoration: InputDecoration(
+                hintText: 'Type your message...',
+                hintStyle: GoogleFonts.poppins(
+                  color: Colors.grey[400],
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: Colors.grey[100],
+                contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              ),
+              maxLines: null,
+              style: GoogleFonts.poppins(),
+            ),
+          ),
+          SizedBox(width: 16),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.secondaryGreen,
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: IconButton(
+              icon: Icon(Icons.send, color: Colors.white),
+              onPressed: _sendMessage,
+              padding: EdgeInsets.all(14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _sendMessage() async {
+    if (_messageController.text.trim().isEmpty || selectedComplaintId == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('complaints')
+          .doc(selectedComplaintId)
+          .update({
+        'messages': FieldValue.arrayUnion([
+          {
+            'content': _messageController.text,
+            'senderId': 'admin',
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          }
+        ]),
+        'lastMessage': _messageController.text,
+        'lastMessageTimestamp': DateTime.now().millisecondsSinceEpoch,
+      });
+
+      _messageController.clear();
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    } catch (e) {
+      print('Error sending message: $e');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Failed to send message.'),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
 }
+
+
+
 
 

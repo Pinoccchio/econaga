@@ -1,62 +1,53 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../../designs/app_colors.dart';
 import 'SubmittedComplainsPage.dart';
 
 class ComplaintsPage extends StatefulWidget {
-  final String userId; // Variable to hold the userId
+  final String userId;
 
-  ComplaintsPage({Key? key, required this.userId}) : super(key: key); // Constructor
+  ComplaintsPage({Key? key, required this.userId}) : super(key: key);
 
   @override
   _ComplaintsPageState createState() => _ComplaintsPageState();
 }
 
 class _ComplaintsPageState extends State<ComplaintsPage> {
-  late String _firstName;
-  late String _lastName;
-  late String _email;
-  late String _contactNumber;
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _contactNumberController = TextEditingController();
-  final TextEditingController _complaintController = TextEditingController(); // Added controller for complaint
+  final TextEditingController _complaintController = TextEditingController();
+
+  bool _isSubmitting = false;
 
   @override
   void initState() {
     super.initState();
-    _fetchUserData(); // Fetch user data on initialization
+    _fetchUserData();
+    _initializeFirestore();
+  }
+
+  void _initializeFirestore() {
+    FirebaseFirestore.instance.settings = Settings(persistenceEnabled: true, cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED);
   }
 
   Future<void> _fetchUserData() async {
     try {
-      print('Fetching user data for userId: ${widget.userId}');
       DocumentSnapshot doc = await FirebaseFirestore.instance
           .collection('USERS_ACCOUNTS')
-          .doc(widget.userId) // Access document by userId
+          .doc(widget.userId)
           .get();
 
       if (doc.exists) {
         setState(() {
-          _firstName = doc['first_name'] ?? '';
-          _lastName = doc['last_name'] ?? '';
-          _email = doc['email'] ?? '';
-          _contactNumber = doc['phone_number'] ?? '';
-
-          // Update controllers with fetched data
-          _firstNameController.text = _firstName;
-          _lastNameController.text = _lastName;
-          _emailController.text = _email;
-          _contactNumberController.text = _contactNumber;
+          _firstNameController.text = doc['first_name'] ?? '';
+          _lastNameController.text = doc['last_name'] ?? '';
+          _emailController.text = doc['email'] ?? '';
+          _contactNumberController.text = doc['phone_number'] ?? '';
         });
-        print('User data fetched successfully:');
-        print('First Name: $_firstName');
-        print('Last Name: $_lastName');
-        print('Email: $_email');
-        print('Contact Number: $_contactNumber');
       } else {
         print('No user data found for userId: ${widget.userId}');
       }
@@ -66,8 +57,93 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
   }
 
   Future<void> _submitComplaint() async {
-    try {
-      await FirebaseFirestore.instance.collection('COMPLAINTS').add({
+    if (_complaintController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Please enter your complaint.'),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.all(16),
+      ));
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.secondaryGreen),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  "Submitting complaint...",
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    int retryCount = 0;
+    while (retryCount < 3) {
+      try {
+        await _forceSubmitComplaint();
+        Navigator.of(context).pop(); // Close the loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Complaint submitted successfully!'),
+          backgroundColor: AppColors.secondaryGreen,
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
+        ));
+        _complaintController.clear();
+        break;
+      } catch (e) {
+        print('Error submitting complaint (attempt ${retryCount + 1}): $e');
+        retryCount++;
+        if (retryCount == 3) {
+          Navigator.of(context).pop(); // Close the loading dialog
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Failed to submit complaint. Please try again later.'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.all(16),
+          ));
+        } else {
+          await Future.delayed(Duration(seconds: 2)); // Wait before retrying
+        }
+      }
+    }
+
+    setState(() {
+      _isSubmitting = false;
+    });
+  }
+
+
+  Future<void> _forceSubmitComplaint() async {
+    final connectivityResult = await (Connectivity().checkConnectivity());
+    if (connectivityResult == ConnectivityResult.none) {
+      // If offline, add to a local collection for syncing later
+      await FirebaseFirestore.instance.collection('pending_complaints').add({
         'userId': widget.userId,
         'first_name': _firstNameController.text,
         'last_name': _lastNameController.text,
@@ -75,28 +151,47 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
         'contact_number': _contactNumberController.text,
         'complaint': _complaintController.text,
         'timestamp': FieldValue.serverTimestamp(),
+        'status': 'open',
+        'messages': [
+          {
+            'content': _complaintController.text,
+            'senderId': widget.userId,
+            'timestamp': DateTime.now().toUtc().millisecondsSinceEpoch,
+          }
+        ],
+        'lastMessage': _complaintController.text,
+        'lastMessageTimestamp': DateTime.now().toUtc().millisecondsSinceEpoch,
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Complaint submitted successfully!'),
-        backgroundColor: Colors.green,
-      ));
-      // Clear the form
-      _complaintController.clear();
-    } catch (e) {
-      print('Error submitting complaint: $e');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Failed to submit complaint. Please try again later.'),
-        backgroundColor: Colors.red,
-      ));
+    } else {
+      // If online, submit directly
+      await FirebaseFirestore.instance.collection('complaints').add({
+        'userId': widget.userId,
+        'first_name': _firstNameController.text,
+        'last_name': _lastNameController.text,
+        'email': _emailController.text,
+        'contact_number': _contactNumberController.text,
+        'complaint': _complaintController.text,
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': 'open',
+        'messages': [
+          {
+            'content': _complaintController.text,
+            'senderId': widget.userId,
+            'timestamp': DateTime.now().toUtc().millisecondsSinceEpoch,
+          }
+        ],
+        'lastMessage': _complaintController.text,
+        'lastMessageTimestamp': DateTime.now().toUtc().millisecondsSinceEpoch,
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.origColor, // Set body background color
+      backgroundColor: AppColors.origColor,
       appBar: AppBar(
-        backgroundColor: Colors.transparent, // Light green color
+        backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
           'COMPLAINTS FORM',
@@ -112,7 +207,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
             icon: Icon(Icons.more_vert, color: Colors.black),
             onSelected: (String value) {
               if (value == 'refresh') {
-                print('Refresh clicked');
+                _fetchUserData();
               } else if (value == 'submitted') {
                 Navigator.push(
                   context,
@@ -126,21 +221,15 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
               return [
                 PopupMenuItem<String>(
                   value: 'refresh',
-                  child: Text(
-                    'Refresh',
-                    style: TextStyle(color: Colors.white),
-                  ),
+                  child: Text('Refresh', style: TextStyle(color: Colors.white)),
                 ),
                 PopupMenuItem<String>(
                   value: 'submitted',
-                  child: Text(
-                    'Submitted Complaints',
-                    style: TextStyle(color: Colors.white),
-                  ),
+                  child: Text('Submitted Complaints', style: TextStyle(color: Colors.white)),
                 ),
               ];
             },
-            color: Color(0xFF4D4D4D), // Set PopupMenu background color to dark gray
+            color: Color(0xFF4D4D4D),
           ),
         ],
       ),
@@ -151,86 +240,34 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(height: 20),
-              // First Name field
-              TextField(
-                controller: _firstNameController,
-                decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.person),
-                  hintText: 'First Name',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
+              _buildTextField(_firstNameController, 'First Name', Icons.person),
               SizedBox(height: 20),
-              // Last Name field
-              TextField(
-                controller: _lastNameController,
-                decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.person),
-                  hintText: 'Last Name',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
+              _buildTextField(_lastNameController, 'Last Name', Icons.person),
               SizedBox(height: 20),
-              // Email field
-              TextField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.email),
-                  hintText: 'Email',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
+              _buildTextField(_emailController, 'Email', Icons.email),
               SizedBox(height: 20),
-              // Phone field
-              TextField(
-                controller: _contactNumberController,
-                decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.phone),
-                  hintText: 'Contact Number',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
+              _buildTextField(_contactNumberController, 'Contact Number', Icons.phone),
               SizedBox(height: 20),
-              // Complaints text field
               TextField(
                 controller: _complaintController,
                 maxLines: 5,
                 decoration: InputDecoration(
-                  hintText: 'Enter your Complaints',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                  hintText: 'Enter your Complaint',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   filled: true,
                   fillColor: Colors.white,
                 ),
               ),
               SizedBox(height: 30),
-              // Submit button
               ElevatedButton(
-                onPressed: _submitComplaint,
+                onPressed: _isSubmitting ? null : _submitComplaint,
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.symmetric(horizontal: 50, vertical: 15),
                 ),
                 child: Text(
-                  'SUBMIT',
+                  _isSubmitting ? 'SUBMITTING...' : 'SUBMIT',
                   style: GoogleFonts.lato(
-                    fontSize: 16, // Smaller font size
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.black,
                   ),
@@ -242,4 +279,28 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
       ),
     );
   }
+
+  Widget _buildTextField(TextEditingController controller, String hint, IconData icon) {
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        prefixIcon: Icon(icon),
+        hintText: hint,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        filled: true,
+        fillColor: Colors.white,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _emailController.dispose();
+    _contactNumberController.dispose();
+    _complaintController.dispose();
+    super.dispose();
+  }
 }
+
