@@ -10,13 +10,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:intl/intl.dart';
 
 class AdminAccountPage extends StatefulWidget {
   @override
   _AdminAccountPageState createState() => _AdminAccountPageState();
 }
 
-class _AdminAccountPageState extends State<AdminAccountPage> {
+class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   final _formKey = GlobalKey<FormState>();
   final TextEditingController firstNameController = TextEditingController();
   final TextEditingController middleNameController = TextEditingController();
@@ -27,6 +29,9 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
   final TextEditingController addressController = TextEditingController();
   final TextEditingController dateOfBirthController = TextEditingController();
   final TextEditingController truckNumberController = TextEditingController();
+  final TextEditingController _fullNameController = TextEditingController();
+  final TextEditingController _contactNumberController = TextEditingController();
+  final TextEditingController _dateRegisteredController = TextEditingController();
 
   bool _isLoading = false;
   LatLng? selectedLocation;
@@ -38,18 +43,379 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
 
   late List<FocusNode> _focusNodes;
 
+  Map<String, dynamic> _adminProfile = {
+    'full_name': '',
+    'email': '',
+    'created_at': null,
+    'contact_number': '',
+    'role': 'admin',
+  };
+
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _focusNodes = List.generate(9, (index) => FocusNode());
+    _loadAdminProfile();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Admin Dashboard',
+            style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold,
+                color: Colors.white
+            )
+        ),
+        backgroundColor: Colors.green.shade700,
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: [
+            Tab(
+              child: Text('Admin Profile',
+                  style: GoogleFonts.poppins(color: Colors.white)
+              ),
+            ),
+            Tab(
+              child: Text('Account Management',
+                  style: GoogleFonts.poppins(color: Colors.white)
+              ),
+            ),
+          ],
+          indicatorColor: Colors.white,
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildAdminProfileTab(),
+          _buildAccountManagementTab(),
+        ],
+      ),
+    );
   }
 
   @override
   void dispose() {
+    _tabController.dispose();
     for (var node in _focusNodes) {
       node.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _loadAdminProfile() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final doc = await FirebaseFirestore.instance
+            .collection('ADMIN_ACCOUNTS')
+            .doc(user.uid)
+            .get();
+
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>;
+          setState(() {
+            _adminProfile = {
+              'full_name': data['full_name'] ?? '',
+              'email': data['email'] ?? '',
+              'created_at': data['created_at'],
+              'contact_number': data['contact_number'] ?? '',
+              'role': data['role'] ?? 'admin',
+            };
+
+            // Set controller values
+            _fullNameController.text = data['full_name'] ?? '';
+            _contactNumberController.text = data['contact_number'] ?? '';
+            emailController.text = data['email'] ?? ''; // Set email controller
+            if (data['created_at'] != null) {
+              _dateRegisteredController.text = DateFormat('MM/dd/yyyy')
+                  .format((data['created_at'] as Timestamp).toDate());
+            }
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading admin profile: $e');
+    }
+  }
+
+  Widget _buildAdminProfileTab() {
+    return Container(
+      color: Colors.grey.shade100,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Column(
+                          children: [
+                            CircleAvatar(
+                              radius: 50,
+                              backgroundColor: Colors.green.shade200,
+                              child: Text(
+                                _adminProfile['full_name']?.isNotEmpty == true
+                                    ? _adminProfile['full_name'][0].toUpperCase()
+                                    : 'A',
+                                style: TextStyle(fontSize: 40, color: Colors.green.shade700),
+                              ),
+                            ),
+                            SizedBox(height: 10),
+                            Text(
+                              _adminProfile['role'] ?? 'Admin',
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w500,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(width: 20),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _adminProfile['full_name'] ?? 'Admin Name',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green.shade700,
+                                ),
+                              ),
+                              SizedBox(height: 5),
+                              Text(
+                                _adminProfile['email'] ?? 'admin@example.com',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              SizedBox(height: 10),
+                              Text(
+                                'Joined ${_formatDate(_adminProfile['created_at'])}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: 20),
+            _buildProfileInfoTab(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileInfoTab() {
+    return Card(
+      elevation: 8,  // Added subtle shadow for modern effect
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: Form(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Full Name Field
+              TextFormField(
+                controller: _fullNameController,
+                decoration: InputDecoration(
+                  labelText: 'Full Name',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person, color: Colors.green.shade700),
+                  contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                ),
+              ),
+              SizedBox(height: 16),
+
+              // Contact Number Field
+              TextFormField(
+                controller: _contactNumberController,
+                decoration: InputDecoration(
+                  labelText: 'Contact Number',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.phone, color: Colors.green.shade700),
+                  contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                ),
+                keyboardType: TextInputType.phone,
+              ),
+              SizedBox(height: 16),
+
+              // Non-editable Email Field
+              TextFormField(
+                controller: emailController, // Email controller
+                readOnly: true, // Prevent editing
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.email, color: Colors.green.shade700),
+                  fillColor: Colors.grey.shade100, // Grayish background
+                  filled: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                ),
+                style: TextStyle(
+                  color: Colors.grey.shade600, // Grayish text color
+                ),
+              ),
+              SizedBox(height: 16),
+
+              // Date Registered Field
+              TextFormField(
+                controller: _dateRegisteredController,
+                readOnly: true,
+                decoration: InputDecoration(
+                  labelText: 'Date Registered',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.calendar_today, color: Colors.green.shade700),
+                  contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                ),
+                onTap: _selectDate,  // Date selection logic
+              ),
+              SizedBox(height: 32),  // Increased space between the fields and buttons
+
+              // Update Info Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _updateAdminProfile,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade600,  // Modern green color
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),  // Rounded corners
+                    ),
+                    elevation: 5,  // Subtle shadow
+                  ),
+                  child: Text(
+                    'Update Info',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: 16),  // Space between buttons
+
+              // Send Password Reset Email Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    _sendPasswordResetEmail(_adminProfile['email']);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue.shade600,  // Modern blue color
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),  // Rounded corners
+                    ),
+                    elevation: 5,  // Subtle shadow
+                  ),
+                  child: Text(
+                    'Send Reset Password Email to Admin Account',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+  // Date Picker function
+  Future<void> _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000), // Allow selection from the year 2000
+      lastDate: DateTime.now(), // Restrict future dates
+      builder: (BuildContext context, Widget? child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            primaryColor: Colors.green.shade700,
+            hintColor: Colors.green.shade700,
+            buttonTheme: ButtonThemeData(textTheme: ButtonTextTheme.primary),
+            colorScheme: ColorScheme.light(primary: Colors.green.shade700),
+            // Optionally customize other elements like header text style
+            textTheme: TextTheme(
+              headline6: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != DateTime.now()) {
+      setState(() {
+        _dateRegisteredController.text = DateFormat('MM/dd/yyyy').format(picked);
+      });
+    }
+  }
+
+  Future<void> _updateAdminProfile() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('ADMIN_ACCOUNTS')
+            .doc(user.uid)
+            .update({
+          'full_name': _fullNameController.text.trim(),
+          'contact_number': _contactNumberController.text.trim(),
+          'created_at': Timestamp.fromDate(DateFormat('MM/dd/yyyy').parse(_dateRegisteredController.text)),
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Profile updated successfully'),
+            backgroundColor: Colors.green.shade600,
+          ),
+        );
+
+        // Reload admin profile
+        _loadAdminProfile();
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating profile: $e'),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+    }
   }
 
   Future<String> getDescriptiveLocation(double lat, double lon) async {
@@ -60,7 +426,6 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
       final data = json.decode(response.body);
       final address = data['address'];
 
-      // Get the address components including road and suburb
       final road = address['road'] ?? '';
       final suburb = address['suburb'] ?? '';
       final city = address['city'] ?? address['town'] ?? address['village'] ?? '';
@@ -68,7 +433,6 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
       final country = address['country'] ?? '';
       final postcode = address['postcode'] ?? '';
 
-      // Return the full address directly, joining parts as needed
       return '${road.isNotEmpty ? road + ', ' : ''}'
           '${suburb.isNotEmpty ? suburb + ', ' : ''}'
           '${city.isNotEmpty ? city + ', ' : ''}'
@@ -80,26 +444,57 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Account Management', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.white)),
-        backgroundColor: Colors.green.shade700,
-      ),
-      body: Row(
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
         children: [
-          Expanded(
-            flex: 1,
-            child: _buildAccountForm(),
+          Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+          SizedBox(width: 8),
+          Text(
+            '$label: ',
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-          VerticalDivider(thickness: 1, width: 1, color: Colors.green.shade200),
-          Expanded(
-            flex: 1,
-            child: _buildAccountList(),
+          Text(
+            value,
+            style: TextStyle(
+              color: Colors.black87,
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String? value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$label: ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade700)),
+          Expanded(child: Text(value ?? 'N/A')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccountManagementTab() {
+    return Row(
+      children: [
+        Expanded(
+          flex: 1,
+          child: _buildAccountForm(),
+        ),
+        VerticalDivider(thickness: 1, width: 1, color: Colors.green.shade200),
+        Expanded(
+          flex: 1,
+          child: _buildAccountList(),
+        ),
+      ],
     );
   }
 
@@ -148,14 +543,12 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
               SizedBox(height: 10),
               _buildRoleDropdown(),
               SizedBox(height: 10),
-              if (selectedRole == 'collector') ...[
-                _buildTextField(truckNumberController, 'Truck Number', icon: Icons.local_shipping),
-                SizedBox(height: 10),
-                _buildLocationSelector(),
-                SizedBox(height: 10),
-                _buildTextField(addressController, "Collection Zone", icon: Icons.location_on, readOnly: true),
-                SizedBox(height: 10),
-              ],
+              _buildTextField(truckNumberController, 'Truck Number', icon: Icons.local_shipping),
+              SizedBox(height: 10),
+              _buildLocationSelector(),
+              SizedBox(height: 10),
+              _buildTextField(addressController, "Collection Zone", icon: Icons.location_on, readOnly: true),
+              SizedBox(height: 10),
               _buildImageUploadSection(),
               SizedBox(height: 20),
               Center(
@@ -333,13 +726,11 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
         filled: true,
         fillColor: Colors.white,
       ),
-      value: selectedRole,
+      value: 'collector',
       onChanged: (String? newValue) {
-        setState(() {
-          selectedRole = newValue!;
-        });
+        // No need to change the state as there's only one option
       },
-      items: <String>['collector', 'client'].map<DropdownMenuItem<String>>((String value) {
+      items: <String>['collector'].map<DropdownMenuItem<String>>((String value) {
         return DropdownMenuItem<String>(
           value: value,
           child: Text(value.capitalize()),
@@ -499,11 +890,11 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
         String? selfieImageUrl;
 
         if (idImage != null) {
-          idImageUrl = await _uploadImageToFirebase(idImage!, '${selectedRole}s/${userCredential.user!.uid}/id_image');
+          idImageUrl = await _uploadImageToFirebase(idImage!, 'collectors/${userCredential.user!.uid}/id_image');
         }
 
         if (selfieImage != null) {
-          selfieImageUrl = await _uploadImageToFirebase(selfieImage!, '${selectedRole}s/${userCredential.user!.uid}/selfie_image');
+          selfieImageUrl = await _uploadImageToFirebase(selfieImage!, 'collectors/${userCredential.user!.uid}/selfie_image');
         }
 
         Map<String, dynamic> userData = {
@@ -514,14 +905,14 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
           'phone_number': phoneNumberController.text.trim(),
           'date_of_birth': dateOfBirthController.text.trim(),
           'id_type': selectedIdType,
-          'role': selectedRole,
+          'role': 'collector',
           'idImageUrl': idImageUrl,
           'selfieImageUrl': selfieImageUrl,
           'createdAt': FieldValue.serverTimestamp(),
           'status': 'active',
         };
 
-        if (selectedRole == 'collector' && selectedLocation != null) {
+        if (selectedLocation != null) {
           final descriptiveLocation = await getDescriptiveLocation(selectedLocation!.latitude, selectedLocation!.longitude);
           userData['collection_zone'] = {
             'coordinates': GeoPoint(selectedLocation!.latitude, selectedLocation!.longitude),
@@ -535,7 +926,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${selectedRole.capitalize()} account created successfully'),
+              content: Text('Collector account created successfully'),
               backgroundColor: Colors.green.shade600,
               duration: Duration(seconds: 3),
               action: SnackBarAction(
@@ -610,7 +1001,10 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
 
   Widget _buildAccountList() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('USERS_ACCOUNTS').snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('USERS_ACCOUNTS')
+          .where('role', isEqualTo: 'collector')
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
@@ -623,7 +1017,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return Center(
             child: Text(
-              'No accounts yet',
+              'No collector accounts yet',
               style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade700),
             ),
           );
@@ -650,7 +1044,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
                 title: Text('${accountData['first_name']} ${accountData['last_name']}',
                   style: TextStyle(color: accountData['status'] == 'inactive' ? Colors.red.shade700 : Colors.green.shade700),
                 ),
-                subtitle: Text('${accountData['email']} (${accountData['role'].toString().capitalize()})'),
+                subtitle: Text('${accountData['email']} (Driver)'),
                 trailing: Icon(Icons.chevron_right,
                     color: accountData['status'] == 'inactive' ? Colors.red.shade700 : Colors.green.shade700
                 ),
@@ -713,10 +1107,8 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
                       _buildDetailRow('Date of Birth', accountData['date_of_birth']),
                       _buildDetailRow('ID Type', accountData['id_type']),
                       _buildDetailRow('Role', accountData['role']),
-                      if (accountData['role'] == 'collector') ...[
-                        _buildDetailRow('Truck Number', accountData['truck_number']),
-                        _buildDetailRow('Collection Zone', accountData['collection_zone']['descriptive_location']),
-                      ],
+                      _buildDetailRow('Truck Number', accountData['truck_number']),
+                      _buildDetailRow('Collection Zone', accountData['collection_zone']['descriptive_location']),
                       _buildDetailRow('Status', accountData['status'] ?? 'Active'),
                       SizedBox(height: 20),
                       if (accountData['idImageUrl'] != null)
@@ -807,19 +1199,6 @@ class _AdminAccountPageState extends State<AdminAccountPage> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildDetailRow(String label, String? value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('$label: ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade700)),
-          Expanded(child: Text(value ?? 'N/A')),
-        ],
-      ),
     );
   }
 
@@ -973,3 +1352,10 @@ extension StringExtension on String {
   }
 }
 
+String _formatDate(dynamic timestamp) {
+  if (timestamp == null) return 'N/A';
+  if (timestamp is Timestamp) {
+    return DateFormat('MMMM d, y').format(timestamp.toDate());
+  }
+  return 'N/A';
+}

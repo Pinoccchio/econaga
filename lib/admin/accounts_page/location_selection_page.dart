@@ -14,15 +14,9 @@ class LocationSelectionPage extends StatefulWidget {
 class _LocationSelectionPageState extends State<LocationSelectionPage> {
   final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
-  LatLng _currentPosition = LatLng(13.6218, 123.1945); // Default to Naga City
-  LatLng _initialPosition = LatLng(13.6218, 123.1945); // Initial center
+  LatLng _nagaCity = LatLng(13.6218, 123.1945); // Naga City coordinates
+  LatLng _markerPosition = LatLng(13.6218, 123.1945); // Initial marker position (Naga City)
   bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    getLocationFromIP(); // Fetch location from IP on initialization
-  }
 
   Future<void> getLocationFromIP() async {
     setState(() {
@@ -38,11 +32,10 @@ class _LocationSelectionPageState extends State<LocationSelectionPage> {
         final latitude = double.parse(location[0]);
         final longitude = double.parse(location[1]);
 
-        // Update the current position and map
+        // Update the marker position and map
         setState(() {
-          _currentPosition = LatLng(latitude, longitude);
-          _initialPosition = LatLng(latitude, longitude); // Update initial position
-          _mapController.move(_currentPosition, 14.0); // Move map to current position
+          _markerPosition = LatLng(latitude, longitude);
+          _mapController.move(_markerPosition, 14.0); // Move map to current position
         });
       } else {
         print('Failed to get location from IP');
@@ -69,8 +62,8 @@ class _LocationSelectionPageState extends State<LocationSelectionPage> {
         if (locations.isNotEmpty) {
           final newLocation = locations.first;
           setState(() {
-            _currentPosition = LatLng(newLocation.latitude, newLocation.longitude);
-            _mapController.move(_currentPosition, 14.0); // Move map to new location
+            _markerPosition = LatLng(newLocation.latitude, newLocation.longitude);
+            _mapController.move(_markerPosition, 14.0); // Move map to new location
           });
         }
       } catch (e) {
@@ -82,11 +75,16 @@ class _LocationSelectionPageState extends State<LocationSelectionPage> {
     }
   }
 
-  Future<void> _goToCurrentLocation() async {
-    // Fetch the current location from IP again
+  void _goToCurrentLocation() async {
+    // Fetch the current location from IP
     await getLocationFromIP();
-    // After fetching, move the map to the current position
-    _mapController.move(_currentPosition, 14.0);
+  }
+
+  void _resetToNagaCity() {
+    setState(() {
+      _markerPosition = _nagaCity;
+      _mapController.move(_nagaCity, 14.0);
+    });
   }
 
   @override
@@ -98,67 +96,78 @@ class _LocationSelectionPageState extends State<LocationSelectionPage> {
           IconButton(
             icon: Icon(Icons.check),
             onPressed: () {
-              Navigator.pop(context, _currentPosition); // Return the selected location
+              Navigator.pop(context, _markerPosition); // Return the selected location
             },
           ),
         ],
       ),
-      body: Expanded(
-        child: Stack(
-          children: [
-            FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _initialPosition,
-                initialZoom: 14.0,
-                backgroundColor: Colors.grey[300]!,
-                onTap: (tapPosition, latLng) {
-                  setState(() {
-                    _currentPosition = latLng; // Update current position on tap
-                    _mapController.move(latLng, 14.0);
-                  });
-                },
-                interactionOptions: InteractionOptions(
-                  flags: InteractiveFlag.all,
-                ),
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: _nagaCity,
+              initialZoom: 14.0,
+              backgroundColor: Colors.grey[300]!,
+              onTap: (tapPosition, latLng) {
+                setState(() {
+                  _markerPosition = latLng; // Update marker position on tap
+                });
+              },
+              interactionOptions: InteractionOptions(
+                flags: InteractiveFlag.all,
               ),
-              children: [
-                TileLayer(
-                  urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                  subdomains: ['a', 'b', 'c'],
-                ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _currentPosition, // Use current position for marker
-                      width: 80.0,
-                      height: 80.0,
-                      child: Icon(
-                        Icons.location_pin,
-                        color: Colors.red,
-                        size: 40.0,
-                      ),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                subdomains: ['a', 'b', 'c'],
+              ),
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: _markerPosition,
+                    width: 80.0,
+                    height: 80.0,
+                    child: Icon(
+                      Icons.location_pin,
+                      color: Colors.red,
+                      size: 40.0,
                     ),
-                  ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+          if (_isLoading)
+            Center(
+              child: CircularProgressIndicator(),
+            ),
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton(
+                  onPressed: _goToCurrentLocation,
+                  child: Icon(Icons.my_location),
+                  backgroundColor: Colors.green,
+                  heroTag: 'currentLocation',
+                ),
+                SizedBox(height: 16),
+                FloatingActionButton(
+                  onPressed: _resetToNagaCity,
+                  child: Icon(Icons.home),
+                  backgroundColor: Colors.blue,
+                  heroTag: 'nagaCity',
                 ),
               ],
             ),
-            if (_isLoading)
-              Center(
-                child: CircularProgressIndicator(),
-              ),
-            Positioned(
-              bottom: 16,
-              right: 16,
-              child: FloatingActionButton(
-                onPressed: _goToCurrentLocation,
-                child: Icon(Icons.my_location),
-                backgroundColor: Colors.green,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
+

@@ -10,7 +10,7 @@ import '../requests_page/admin_garbage_collection_request.dart';
 import '../requests_page/admin_lipat_bahay_service.dart';
 import 'admin_dashboard.dart';
 import 'admin_sign_in_page.dart';
-import 'collector_driving_monitoring_page.dart';
+import 'driving_monitoring_page.dart';
 
 class AdminHomePage extends StatefulWidget {
   final String userId;
@@ -23,11 +23,6 @@ class AdminHomePage extends StatefulWidget {
 
 class _AdminHomePageState extends State<AdminHomePage> {
   String _currentPage = 'Dashboard';
-  TextEditingController fullNameController = TextEditingController();
-  TextEditingController emailController = TextEditingController();
-  TextEditingController currentPasswordController = TextEditingController();
-  TextEditingController newPasswordController = TextEditingController();
-  TextEditingController confirmPasswordController = TextEditingController();
   bool isDrawerOpen = true;
 
   @override
@@ -47,43 +42,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
           },
         ),
         actions: [
-          // Notification button is temporarily hidden
-          // Stack(
-          //   children: [
-          //     IconButton(
-          //       icon: Icon(Icons.notifications, color: Colors.green),
-          //       onPressed: () {
-          //         // Notification functionality here
-          //       },
-          //       splashColor: Colors.grey.withOpacity(0.3),
-          //       highlightColor: Colors.grey.withOpacity(0.1),
-          //     ),
-          //     Positioned(
-          //       right: 5,
-          //       top: 5,
-          //       child: Container(
-          //         padding: EdgeInsets.all(2),
-          //         decoration: BoxDecoration(
-          //           color: Colors.blue,
-          //           borderRadius: BorderRadius.circular(10),
-          //         ),
-          //         constraints: BoxConstraints(
-          //           minWidth: 18,
-          //           minHeight: 18,
-          //         ),
-          //         child: Text(
-          //           '20',
-          //           style: TextStyle(color: Colors.white, fontSize: 12),
-          //           textAlign: TextAlign.center,
-          //         ),
-          //       ),
-          //     ),
-          //   ],
-          // ),
-          SizedBox(width: 10),
-          CircleAvatar(
-            backgroundImage: AssetImage('lib/components/assets/images/official_logo.png'),
-          ),
           SizedBox(width: 10),
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance.collection('ADMIN_ACCOUNTS').doc(widget.userId).snapshots(),
@@ -98,18 +56,45 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 return Text('User not found', style: TextStyle(color: Colors.black));
               }
               var userData = snapshot.data!.data() as Map<String, dynamic>;
-              return Text(userData['full_name'] ?? 'Unknown', style: TextStyle(color: Colors.black));
+              String email = userData['email'] ?? '';
+              String fullName = userData['full_name'] ?? '';
+              String firstLetter = email.isNotEmpty ? email[0].toUpperCase() : 'U'; // Default to 'U' if email is empty
+
+              return Row(
+                children: [
+                  Text(
+                    fullName, // Display the full name
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _currentPage = 'Account'; // Update the page to 'Account'
+                      });
+                    },
+                    child: CircleAvatar(
+                      backgroundColor: Colors.green, // Set the background color to green
+                      child: Text(
+                        firstLetter, // Display the first letter of the email
+                        style: TextStyle(
+                          color: Colors.white, // Set the text color to white
+                          fontSize: 24, // Adjust the font size for better visibility
+                          fontWeight: FontWeight.bold, // Make the letter bold
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 10),
+                ],
+              );
             },
           ),
           SizedBox(width: 10),
-          IconButton(
-            icon: Icon(Icons.person, color: Colors.green),
-            onPressed: () {
-              showChangeAccountInfoModal(context);
-            },
-            splashColor: Colors.grey.withOpacity(0.3),
-            highlightColor: Colors.grey.withOpacity(0.1),
-          ),
         ],
       ),
       body: Row(
@@ -144,7 +129,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     leading: Icon(Icons.monitor, color: Colors.green),
                     title: Text('Monitoring'),
                     children: [
-                      _buildListTile('Collector/Driver Monitoring', null, 'CollectorDriverMonitoring'),
+                      _buildListTile('Driver Monitoring', null, 'DriverMonitoring'),
                       _buildListTile('Truck Monitoring', null, 'TruckMonitoring'),
                     ],
                   ),
@@ -166,8 +151,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 ? AdminLipatBahayServiceRequest()
                 : _currentPage == 'Complaints'
                 ? ComplaintsOverview()
-                : _currentPage == 'CollectorDriverMonitoring'
-                ? CollectorDriverMonitoringPage()
+                : _currentPage == 'DriverMonitoring'
+                ? DrivingMonitoringPage()
                 : _currentPage == 'TruckMonitoring'
                 ? TruckMonitoringPage()
                 : _currentPage == 'Account'
@@ -178,8 +163,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
       ),
     );
   }
-
-
 
   Widget _buildListTile(String title, IconData? icon, String page, {Color color = Colors.green}) {
     return ListTile(
@@ -209,207 +192,5 @@ class _AdminHomePageState extends State<AdminHomePage> {
         SnackBar(content: Text("Error logging out: $e"), backgroundColor: Colors.red),
       );
     }
-  }
-
-  void showChangeAccountInfoModal(BuildContext context) {
-    FirebaseFirestore.instance.collection('ADMIN_ACCOUNTS').doc(widget.userId).get().then((DocumentSnapshot snapshot) {
-      if (snapshot.exists) {
-        var userData = snapshot.data() as Map<String, dynamic>;
-        fullNameController.text = userData['full_name'] ?? '';
-        emailController.text = userData['email'] ?? '';
-
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
-          ),
-          builder: (BuildContext context) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: SingleChildScrollView(
-                child: Container(
-                  padding: EdgeInsets.all(20.0),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
-                    border: Border.all(
-                      color: Colors.green,
-                      width: 2,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        'Change Account Information',
-                        style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      _buildEditableProfileField(
-                        Icons.person,
-                        'Full Name',
-                        'Enter your full name',
-                        fullNameController,
-                        borderColor: Colors.green,
-                      ),
-                      SizedBox(height: 20),
-                      _buildEditableProfileField(
-                        Icons.email,
-                        'Email Address',
-                        'Enter your email address',
-                        emailController,
-                        borderColor: Colors.green,
-                      ),
-                      SizedBox(height: 20),
-                      Text(
-                        'Change Password',
-                        style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      _buildEditableProfileField(
-                        Icons.lock,
-                        'Current Password',
-                        'Enter your current password',
-                        currentPasswordController,
-                        isObscure: true,
-                        borderColor: Colors.green,
-                      ),
-                      SizedBox(height: 20),
-                      _buildEditableProfileField(
-                        Icons.lock,
-                        'New Password',
-                        'Enter your new password',
-                        newPasswordController,
-                        isObscure: true,
-                        borderColor: Colors.green,
-                      ),
-                      SizedBox(height: 20),
-                      _buildEditableProfileField(
-                        Icons.lock,
-                        'Confirm New Password',
-                        'Re-enter your new password',
-                        confirmPasswordController,
-                        isObscure: true,
-                        borderColor: Colors.green,
-                      ),
-                      SizedBox(height: 30),
-                      ElevatedButton(
-                        onPressed: () {
-                          _updateAccountInfo(context);
-                        },
-                        child: Text('Update Information'),
-                        style: ElevatedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          backgroundColor: Colors.green,
-                          padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      } else {
-        _showSnackbar(context, "No user data found", Colors.red);
-      }
-    }).catchError((error) {
-      _showSnackbar(context, "Error fetching user data: $error", Colors.red);
-    });
-  }
-
-  Widget _buildEditableProfileField(
-      IconData icon,
-      String label,
-      String hint,
-      TextEditingController controller, {
-        bool isObscure = false,
-        Color borderColor = Colors.green
-      }) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: borderColor),
-        borderRadius: BorderRadius.circular(10.0),
-      ),
-      child: TextField(
-        controller: controller,
-        obscureText: isObscure,
-        decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Colors.green),
-          labelText: label,
-          hintText: hint,
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(vertical: 15, horizontal: 10),
-        ),
-      ),
-    );
-  }
-
-  void _updateAccountInfo(BuildContext context) {
-    String currentPassword = currentPasswordController.text.trim();
-    String newPassword = newPasswordController.text.trim();
-    String confirmPassword = confirmPasswordController.text.trim();
-
-    if (currentPassword.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
-      _showSnackbar(context, "All password fields are required for password change.", Colors.red);
-      return;
-    }
-
-    if (newPassword != confirmPassword) {
-      _showSnackbar(context, "New passwords do not match.", Colors.red);
-      return;
-    }
-
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      AuthCredential credential = EmailAuthProvider.credential(
-        email: user.email!,
-        password: currentPassword,
-      );
-
-      user.reauthenticateWithCredential(credential).then((_) {
-        user.updatePassword(newPassword).then((_) {
-          FirebaseFirestore.instance.collection('ADMIN_ACCOUNTS').doc(widget.userId).update({
-            'full_name': fullNameController.text.trim(),
-            'email': emailController.text.trim(),
-          }).then((_) {
-            _showSnackbar(context, "Account information and password updated successfully.", Colors.green);
-            Navigator.of(context).pop();
-          }).catchError((error) {
-            _showSnackbar(context, "Error updating account information: $error", Colors.red);
-          });
-        }).catchError((error) {
-          _showSnackbar(context, "Error updating password: $error", Colors.red);
-        });
-      }).catchError((error) {
-        _showSnackbar(context, "Error authenticating: $error", Colors.red);
-      });
-    } else {
-      _showSnackbar(context, "No user is currently signed in.", Colors.red);
-    }
-  }
-
-  void _showSnackbar(BuildContext context, String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-      ),
-    );
   }
 }

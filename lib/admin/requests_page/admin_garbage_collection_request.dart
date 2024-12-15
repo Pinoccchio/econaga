@@ -488,22 +488,57 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
     FirebaseFirestore.instance
         .collection('GARBAGE_REQUESTS')
         .doc(docId)
-        .update({'status': status}).then((_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Request ${status.toUpperCase()}'),
-          backgroundColor: status == 'approved' ? Colors.green : Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-      _fetchRequests(); // This will update both the list and the counts
+        .get()
+        .then((doc) {
+      if (doc.exists) {
+        String currentStatus = doc.data()!['status'];
+        if (currentStatus == 'approved') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Status cannot be changed once approved.'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+          return;
+        } else {
+          // Update status if not approved
+          FirebaseFirestore.instance
+              .collection('GARBAGE_REQUESTS')
+              .doc(docId)
+              .update({'status': status}).then((_) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Request ${status.toUpperCase()}'),
+                backgroundColor: status == 'approved' ? Colors.green : Colors.red,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            );
+            _fetchRequests(); // This will update both the list and the counts
+          }).catchError((error) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to update status: $error'),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            );
+          });
+        }
+      }
     }).catchError((error) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update status: $error'),
+          content: Text('Failed to fetch request status: $error'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -513,6 +548,7 @@ class _AdminGarbageCollectionRequestState extends State<AdminGarbageCollectionRe
       );
     });
   }
+
 
   void _showDetailsDialog(BuildContext context, Map<String, dynamic> data) {
     showDialog(

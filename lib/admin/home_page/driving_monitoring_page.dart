@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class CollectorDriverMonitoringPage extends StatefulWidget {
+class DrivingMonitoringPage extends StatefulWidget {
   @override
-  _CollectorDriverMonitoringPageState createState() =>
-      _CollectorDriverMonitoringPageState();
+  _DrivingMonitoringPageState createState() => _DrivingMonitoringPageState();
 }
 
-class _CollectorDriverMonitoringPageState
-    extends State<CollectorDriverMonitoringPage> {
+class _DrivingMonitoringPageState extends State<DrivingMonitoringPage> {
   List<Map<String, dynamic>> filteredCollectors = [];
   TextEditingController _searchController = TextEditingController();
 
@@ -77,7 +75,9 @@ class _CollectorDriverMonitoringPageState
           // Apply search filter
           if (_searchController.text.isNotEmpty) {
             filteredCollectors = filteredCollectors.where((collector) {
-              return collector['name'].toLowerCase().contains(_searchController.text.toLowerCase());
+              return collector['name']
+                  .toLowerCase()
+                  .contains(_searchController.text.toLowerCase());
             }).toList();
           }
 
@@ -90,13 +90,15 @@ class _CollectorDriverMonitoringPageState
                   children: [
                     Expanded(
                       flex: 2,
-                      child: Text('Collector', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: Text('Driver',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                     Expanded(
                       flex: 2,
                       child: Align(
                         alignment: Alignment.center,
-                        child: Text('Availability', style: TextStyle(fontWeight: FontWeight.bold)),
+                        child: Text('Availability',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ],
@@ -165,13 +167,15 @@ class CollectorCard extends StatelessWidget {
             child: Row(
               children: [
                 CircleAvatar(
-                  backgroundImage: image.isNotEmpty ? NetworkImage(image) : null,
+                  backgroundImage:
+                      image.isNotEmpty ? NetworkImage(image) : null,
                   child: image.isEmpty ? Icon(Icons.person) : null,
                   radius: 20,
                 ),
                 SizedBox(width: 10),
                 Expanded(
-                  child: Text(name, style: TextStyle(fontWeight: FontWeight.bold)),
+                  child:
+                      Text(name, style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -188,7 +192,8 @@ class CollectorCard extends StatelessWidget {
                 ),
                 child: Text(
                   availability.toUpperCase(),
-                  style: TextStyle(color: availabilityColor, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: availabilityColor, fontWeight: FontWeight.bold),
                 ),
               ),
             ),

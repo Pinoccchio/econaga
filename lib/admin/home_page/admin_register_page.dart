@@ -13,6 +13,7 @@ class _AdminRegisterPageState extends State<AdminRegisterPage> {
   final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _contactNumberController = TextEditingController();  // Updated controller name
   bool _obscurePassword = true;
 
   @override
@@ -81,6 +82,13 @@ class _AdminRegisterPageState extends State<AdminRegisterPage> {
                         ),
                         SizedBox(height: 20),
                         _buildTextField(
+                          label: 'Contact Number',  // Updated label
+                          controller: _contactNumberController,  // Updated controller
+                          isPassword: false,
+                          icon: Icons.phone,
+                        ),
+                        SizedBox(height: 20),
+                        _buildTextField(
                           label: 'Password',
                           controller: _passwordController,
                           isPassword: true,
@@ -96,7 +104,10 @@ class _AdminRegisterPageState extends State<AdminRegisterPage> {
                             child: Text(
                               'REGISTER',
                               style: TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold),
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white, // Set text color to white
+                              ),
                             ),
                             style: ElevatedButton.styleFrom(
                               padding: EdgeInsets.symmetric(vertical: 16),
@@ -173,9 +184,10 @@ class _AdminRegisterPageState extends State<AdminRegisterPage> {
     String fullName = _fullNameController.text.trim();
     String email = _emailController.text.trim();
     String password = _passwordController.text.trim();
+    String contactNumber = _contactNumberController.text.trim();  // Updated variable name
 
     // Check if fields are filled
-    if (fullName.isEmpty || email.isEmpty || password.isEmpty) {
+    if (fullName.isEmpty || email.isEmpty || password.isEmpty || contactNumber.isEmpty) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -205,6 +217,7 @@ class _AdminRegisterPageState extends State<AdminRegisterPage> {
       await FirebaseFirestore.instance.collection('ADMIN_ACCOUNTS').doc(userCredential.user?.uid).set({
         'full_name': fullName,
         'email': email,
+        'contact_number': contactNumber,  // Updated Firestore field name
         'created_at': FieldValue.serverTimestamp(),
         'role': 'admin',
       });
