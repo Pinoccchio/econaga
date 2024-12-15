@@ -1,4 +1,4 @@
-import 'package:econaga_prj/user/collector/collector_home_screen/approve_service_screen/transporation_service_request.dart';
+import 'package:econaga_prj/user/collector/collector_home_screen/approve_service_screen/transporation_and_burial_service_request.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -40,11 +40,11 @@ class ApproveServicesScreen extends StatelessWidget {
             ),
             SizedBox(height: 20),
             _buildServiceButton(
-              'Transportation Services Requests',
+              'Transportation and Burial Services Requests',
                   () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => TransportationServiceRequest()),
+                      MaterialPageRoute(builder: (context) => TransportationAndBurialServiceScreen()),
                     );
               },
             ),

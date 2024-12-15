@@ -12,13 +12,12 @@ class NotificationPage extends StatefulWidget {
   _NotificationPageState createState() => _NotificationPageState();
 }
 
-class _NotificationPageState extends State<NotificationPage>
-    with SingleTickerProviderStateMixin {
+class _NotificationPageState extends State<NotificationPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _pendingSubject = BehaviorSubject<List<Map<String, dynamic>>>();
-  final _approvedSubject = BehaviorSubject<List<Map<String, dynamic>>>();
-  final _declinedSubject = BehaviorSubject<List<Map<String, dynamic>>>();
-  final _completedSubject = BehaviorSubject<List<Map<String, dynamic>>>();
+  final _pendingSubject = BehaviorSubject<List<Map<String, dynamic>>>.seeded([]);
+  final _approvedSubject = BehaviorSubject<List<Map<String, dynamic>>>.seeded([]);
+  final _declinedSubject = BehaviorSubject<List<Map<String, dynamic>>>.seeded([]);
+  final _completedSubject = BehaviorSubject<List<Map<String, dynamic>>>.seeded([]);
 
   @override
   void initState() {
@@ -51,6 +50,26 @@ class _NotificationPageState extends State<NotificationPage>
   }
 
   void _listenToRequests(String status, BehaviorSubject<List<Map<String, dynamic>>> subject) {
+    subject.add([]); // Clear the subject before adding new data
+
+    void addData(List<Map<String, dynamic>> newData) {
+      if (subject.hasValue) {
+        final currentData = subject.value;
+        final updatedData = [...currentData, ...newData]
+          ..sort((a, b) {
+            final aTimestamp = a['created_at'] as Timestamp?;
+            final bTimestamp = b['created_at'] as Timestamp?;
+            // Handle null values by treating them as older than non-null values
+            if (aTimestamp == null) return 1; // a is older
+            if (bTimestamp == null) return -1; // b is older
+            return bTimestamp.compareTo(aTimestamp); // Sort descending
+          });
+        subject.add(updatedData);
+      } else {
+        subject.add(newData);
+      }
+    }
+
     FirebaseFirestore.instance
         .collectionGroup('GARBAGE_REQUESTS')
         .where('user_id', isEqualTo: widget.userId)
@@ -59,9 +78,7 @@ class _NotificationPageState extends State<NotificationPage>
         .map((snapshot) => snapshot.docs
         .map((doc) => {'type': 'Garbage Collection', ...doc.data()})
         .toList())
-        .listen((data) {
-      subject.add(data);
-    });
+        .listen(addData);
 
     FirebaseFirestore.instance
         .collectionGroup('BURIAL_REQUESTS')
@@ -71,9 +88,7 @@ class _NotificationPageState extends State<NotificationPage>
         .map((snapshot) => snapshot.docs
         .map((doc) => {'type': 'Burial Service', ...doc.data()})
         .toList())
-        .listen((data) {
-      subject.add([...?subject.value, ...data]);
-    });
+        .listen(addData);
 
     FirebaseFirestore.instance
         .collectionGroup('TRANSPORTATION_REQUESTS')
@@ -83,9 +98,7 @@ class _NotificationPageState extends State<NotificationPage>
         .map((snapshot) => snapshot.docs
         .map((doc) => {'type': 'Lipat Bahay Service', ...doc.data()})
         .toList())
-        .listen((data) {
-      subject.add([...?subject.value, ...data]);
-    });
+        .listen(addData);
   }
 
   Future<void> _refreshData() async {
@@ -210,8 +223,9 @@ class _NotificationPageState extends State<NotificationPage>
     }
 
     final createdAt = request['created_at'];
-    final formattedDate = (createdAt is Timestamp)
-        ? DateFormat('MM/dd/yyyy').format(createdAt.toDate())
+    // Format date and time together
+    final formattedDateTime = (createdAt is Timestamp)
+        ? DateFormat('MM/dd/yyyy hh:mm a').format(createdAt.toDate()) // MM/dd/yyyy hh:mm AM/PM format
         : 'N/A';
 
     return Card(
@@ -224,7 +238,7 @@ class _NotificationPageState extends State<NotificationPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Status: ${request['status']}'),
-            Text('Date: $formattedDate'),
+            Text('Date & Time: $formattedDateTime'), // Display the formatted date and time here
           ],
         ),
         trailing: Container(
@@ -240,11 +254,27 @@ class _NotificationPageState extends State<NotificationPage>
     );
   }
 
+
   void _showRequestDetails(Map<String, dynamic> request) {
     final createdAt = request['created_at'];
-    final formattedDate = (createdAt is Timestamp)
-        ? DateFormat('MM/dd/yyyy').format(createdAt.toDate())
+    final formattedDateTime = (createdAt is Timestamp)
+        ? DateFormat('MM/dd/yyyy hh:mm a').format(createdAt.toDate())
         : 'N/A';
+
+    final contactNumber = request['contact_number'] ?? 'No contact number available';
+    final email = request['email'] ?? 'No email available';
+    final firstName = request['first_name'] ?? 'No first name available';
+    final lastName = request['last_name'] ?? 'No last name available';
+    final userType = request['user_type'] ?? 'No user type available';
+
+    String addressInfo = '';
+    if (request['type'] == 'Burial Service' || request['type'] == 'Lipat Bahay Service') {
+      final pickupLocation = request['pickup_location']?['address'] ?? 'No pickup address available';
+      final destinationLocation = request['destination_location']?['address'] ?? 'No destination address available';
+      addressInfo = 'Pickup: $pickupLocation\nDestination: $destinationLocation';
+    } else {
+      addressInfo = request['location']?['address'] ?? 'No address available';
+    }
 
     showDialog(
       context: context,
@@ -278,76 +308,73 @@ class _NotificationPageState extends State<NotificationPage>
                 Card(
                   color: Colors.green.shade50,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline, color: Colors.green.shade700),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Status: ${request['status']}',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(Icons.date_range, color: Colors.green.shade700),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Date: $formattedDate',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        if (request.containsKey('note'))
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(Icons.notes, color: Colors.green.shade700),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Text(
-                                  'Note: ${request['note']}',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      'Request Date: $formattedDateTime',
+                      style: TextStyle(fontSize: 16, color: Colors.green.shade800),
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.green.shade700,
-                      ),
-                      child: const Text('Close'),
-                    ),
-                  ],
+                const SizedBox(height: 16),
+                Text(
+                  'Status: ${request['status']}',
+                  style: TextStyle(fontSize: 18, color: Colors.green.shade800),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  'Details:',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+
+                Text(
+                  'User Type: ',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade800),
+                ),
+                Container(
+                  margin: EdgeInsets.only(bottom: 8),
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    userType,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
+                  ),
+                ),
+
+                _buildField('First Name:', firstName),
+                _buildField('Last Name:', lastName),
+                _buildField('Email:', email),
+                _buildField('Contact Number:', contactNumber),
+                _buildField('Address Information:', addressInfo),
+
+                if (request['type'] == 'Garbage Collection')
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 8),
+                      Text(
+                        'Note:',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade800),
+                      ),
+                      Container(
+                        margin: EdgeInsets.only(bottom: 8),
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          request['note'] ?? 'No note available',
+                          style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic, color: Colors.orange.shade800),
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -356,4 +383,28 @@ class _NotificationPageState extends State<NotificationPage>
     );
   }
 
+  Widget _buildField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade800),
+        ),
+        Container(
+          margin: EdgeInsets.only(bottom: 8),
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            value,
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+      ],
+    );
+  }
 }
+

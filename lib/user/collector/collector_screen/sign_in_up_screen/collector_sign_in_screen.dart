@@ -127,7 +127,7 @@ class _CollectorSignInScreenState extends State<CollectorSignInScreen> {
                   children: [
                     SizedBox(height: 50),
                     Text(
-                      "Welcome Collector!",
+                      "Welcome Driver!",
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,

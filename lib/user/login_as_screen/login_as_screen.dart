@@ -124,7 +124,7 @@ class _LoginAsScreenState extends State<LoginAsScreen> {
       children: [
         _buildRoleOption(0, 'Client', Icons.person),
         SizedBox(width: 20),
-        _buildRoleOption(1, 'Collector', Icons.work),
+        _buildRoleOption(1, 'Driver', Icons.work),
       ],
     );
   }

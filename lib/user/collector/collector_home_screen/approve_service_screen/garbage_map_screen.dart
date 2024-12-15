@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_html/flutter_html.dart' as html;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class GarbageMapScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -248,20 +249,26 @@ class _GarbageMapScreenState extends State<GarbageMapScreen> {
       return;
     }
 
-    FirebaseFirestore.instance
-        .collection('GARBAGE_REQUESTS')
-        .doc(docId)
-        .update({'status': 'completed'}).then((_) {
+    try {
+      // Format the current date and time as "Dec 15, 2024 9:32 PM"
+      String dateCompleted = DateFormat('MMM d, yyyy h:mm a').format(DateTime.now());
+
+      await FirebaseFirestore.instance.collection('GARBAGE_REQUESTS').doc(docId).update({
+        'status': 'completed',
+        'dateCompleted': dateCompleted, // Add the formatted date
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Pickup completed successfully!'),
           backgroundColor: Colors.green, // Green for success
         ),
       );
+
       setState(() {
         _canCompletePickup = false;
       });
-    }).catchError((error) {
+    } catch (error) {
       print('Error completing pickup: $error');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -269,7 +276,7 @@ class _GarbageMapScreenState extends State<GarbageMapScreen> {
           backgroundColor: Colors.red, // Red for errors
         ),
       );
-    });
+    }
   }
 
   void _changeMapType(MapType type) {

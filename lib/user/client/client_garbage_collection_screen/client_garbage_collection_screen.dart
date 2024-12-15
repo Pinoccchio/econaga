@@ -500,6 +500,7 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
         }
         return null;
       },
+      enabled: label != 'Email', // Disable editing for the email field
     );
   }
 

@@ -8,17 +8,18 @@ import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_html/flutter_html.dart' as html;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
-class TransportationMapScreen extends StatefulWidget {
+class TransportationAndBurialMapScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
 
-  TransportationMapScreen({required this.userData});
+  TransportationAndBurialMapScreen({required this.userData});
 
   @override
-  _TransportationMapScreenState createState() => _TransportationMapScreenState();
+  _TransportationAndBurialMapScreenState createState() => _TransportationAndBurialMapScreenState();
 }
 
-class _TransportationMapScreenState extends State<TransportationMapScreen> {
+class _TransportationAndBurialMapScreenState extends State<TransportationAndBurialMapScreen> {
   late GoogleMapController mapController;
   Set<Marker> _markers = {};
   Set<Polyline> _polylines = {};
@@ -206,7 +207,7 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
 
   Future<List<Step>> _getDirections(LatLng origin, LatLng destination) async {
     final String url =
-        'https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=AIzaSyD4UAtE_r8JjBbd0o5qfv3ZSPX_8xkNJ7c';
+        'https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=YOUR_GOOGLE_API_KEY';
 
     final response = await http.get(Uri.parse(url));
 
@@ -246,7 +247,8 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
           _isNavigatingToPickup = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('You have arrived at the pickup location!'),
+          SnackBar(
+            content: Text('You have arrived at the pickup location!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -259,8 +261,10 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
         });
         _positionStream?.cancel();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('You have arrived at the destination!'),
-            backgroundColor: Colors.green,),
+          SnackBar(
+            content: Text('You have arrived at the destination!'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     }
@@ -276,30 +280,44 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
     String? docId = widget.userData['request_id'] as String?;
     if (docId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: Request ID not found'),
-            backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Error: Request ID not found'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
 
-    FirebaseFirestore.instance
-        .collection('TRANSPORTATION_REQUESTS')
-        .doc(docId)
-        .update({'status': 'completed'}).then((_) {
+    try {
+      String dateCompleted = DateFormat('MMM d, yyyy h:mm a').format(DateTime.now());
+      String collectionName = widget.userData['request_type'] == 'Transportation'
+          ? 'TRANSPORTATION_REQUESTS'
+          : 'BURIAL_REQUESTS';
+
+      await FirebaseFirestore.instance.collection(collectionName).doc(docId).update({
+        'status': 'completed',
+        'dateCompleted': dateCompleted,
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Trip completed successfully!'),
-            backgroundColor: Colors.green),
+        SnackBar(
+          content: Text('Trip completed successfully!'),
+          backgroundColor: Colors.green,
+        ),
       );
+
       setState(() {
         _canCompleteTrip = false;
       });
-    }).catchError((error) {
+    } catch (error) {
       print('Error completing trip: $error');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to complete trip. Please try again.'),
-            backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Failed to complete trip. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
       );
-    });
+    }
   }
 
   @override
@@ -397,6 +415,7 @@ class _TransportationMapScreenState extends State<TransportationMapScreen> {
                       profilePicture: _selfieImageUrl,
                     ),
                     SizedBox(height: 16),
+                    _buildInfoRow(Icons.category, 'Request Type', widget.userData['request_type']),
                     _buildInfoRow(Icons.phone, 'Contact', widget.userData['contact_number']),
                     _buildInfoRow(Icons.location_on, 'Pickup', widget.userData['pickup_location']['address']),
                     _buildInfoRow(Icons.location_on, 'Destination', widget.userData['destination_location']['address']),
@@ -478,3 +497,4 @@ class Step {
 
   Step({required this.instruction, required this.distance, required this.duration});
 }
+

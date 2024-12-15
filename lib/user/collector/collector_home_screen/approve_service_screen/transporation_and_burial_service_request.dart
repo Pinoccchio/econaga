@@ -1,9 +1,9 @@
-import 'package:econaga_prj/user/collector/collector_home_screen/approve_service_screen/transporation_map_screen.dart';
+import 'package:econaga_prj/user/collector/collector_home_screen/approve_service_screen/transporation_and_burial_map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class TransportationServiceRequest extends StatelessWidget {
+class TransportationAndBurialServiceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -29,7 +29,7 @@ class TransportationServiceRequest extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
-              'Transportation Service Request',
+              'Transportation and Burial Service Requests',
               style: GoogleFonts.poppins(
                 color: Colors.grey[600],
                 fontSize: 14,
@@ -37,28 +37,38 @@ class TransportationServiceRequest extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('TRANSPORTATION_REQUESTS')
-                  .where('status', isEqualTo: 'approved')
-                  .snapshots(),
+            child: StreamBuilder<List<QuerySnapshot>>(
+              stream: CombinedStream.combine([
+                FirebaseFirestore.instance
+                    .collection('TRANSPORTATION_REQUESTS')
+                    .where('status', isEqualTo: 'approved')
+                    .snapshots(),
+                FirebaseFirestore.instance
+                    .collection('BURIAL_REQUESTS')
+                    .where('status', isEqualTo: 'approved')
+                    .snapshots(),
+              ]),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(child: CircularProgressIndicator());
                 }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                if (!snapshot.hasData || snapshot.data!.every((qs) => qs.docs.isEmpty)) {
                   return Center(child: Text('No approved requests found.'));
                 }
 
-                final requests = snapshot.data!.docs;
+                List<QueryDocumentSnapshot> allRequests = [];
+                snapshot.data!.forEach((qs) => allRequests.addAll(qs.docs));
 
                 return ListView.separated(
-                  itemCount: requests.length,
+                  itemCount: allRequests.length,
                   separatorBuilder: (context, index) => Divider(height: 1),
                   itemBuilder: (context, index) {
-                    final request = requests[index];
+                    final request = allRequests[index];
                     final data = request.data() as Map<String, dynamic>;
-                    data['request_id'] = request.id; // Add this line to include the document ID
+                    data['request_id'] = request.id;
+                    data['request_type'] = request.reference.parent.id == 'TRANSPORTATION_REQUESTS'
+                        ? 'Transportation'
+                        : 'Burial';
                     return _buildRequestTile(data, context);
                   },
                 );
@@ -78,7 +88,7 @@ class TransportationServiceRequest extends StatelessWidget {
     final serviceType = data['service_type'] ?? 'No service type specified';
     final note = data['note'] != null ? 'Note: ${data['note']}' : 'No additional notes';
 
-    final details = 'Pickup: $pickupLocation\nDestination: $destinationLocation\nService: $serviceType\nContact: $contact\n$note';
+    final details = '${data['request_type']} Request\nPickup: $pickupLocation\nDestination: $destinationLocation\nService: $serviceType\nContact: $contact\n$note';
 
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
@@ -143,7 +153,7 @@ class TransportationServiceRequest extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => TransportationMapScreen(userData: data),
+                builder: (context) => TransportationAndBurialMapScreen(userData: data),
               ),
             );
           }
@@ -203,6 +213,8 @@ class TransportationServiceRequest extends StatelessWidget {
                   text: TextSpan(
                     style: GoogleFonts.poppins(fontSize: 14, color: Colors.black),
                     children: [
+                      TextSpan(text: 'Request Type: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: '${data['request_type']}\n'),
                       TextSpan(text: 'Email: ', style: TextStyle(fontWeight: FontWeight.bold)),
                       TextSpan(text: '${data['email']}\n'),
                       TextSpan(text: 'Contact: ', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -237,3 +249,10 @@ class TransportationServiceRequest extends StatelessWidget {
     );
   }
 }
+
+class CombinedStream {
+  static Stream<List<T>> combine<T>(List<Stream<T>> streams) {
+    return Stream.fromFuture(Future.wait(streams.map((s) => s.first)));
+  }
+}
+

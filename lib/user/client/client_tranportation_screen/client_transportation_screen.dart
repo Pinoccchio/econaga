@@ -6,6 +6,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:google_places_flutter/google_places_flutter.dart';
+import 'package:google_places_flutter/model/prediction.dart';
 import '../../../designs/app_colors.dart';
 import '../client_garbage_collection_screen/approval_dialog.dart';
 
@@ -38,6 +40,8 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
   late TextEditingController _lastNameController;
   late TextEditingController _emailController;
   late TextEditingController _contactNumberController;
+  final _pickupSearchController = TextEditingController();
+  final _destinationSearchController = TextEditingController();
 
   String _firstName = '';
   String _lastName = '';
@@ -63,6 +67,8 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
     _lastNameController.dispose();
     _emailController.dispose();
     _contactNumberController.dispose();
+    _pickupSearchController.dispose();
+    _destinationSearchController.dispose();
     super.dispose();
   }
 
@@ -154,10 +160,6 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
         _isLocationUpdating = false;
       });
     }
-  }
-
-  void _onMapTap(LatLng position, String locationType) {
-    _addMarker(position, locationType);
   }
 
   Future<void> _getCurrentLocation(String locationType) async {
@@ -340,6 +342,24 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
               ),
             ),
             SizedBox(height: 8),
+            GooglePlaceAutoCompleteTextField(
+              textEditingController: locationType == 'pickup' ? _pickupSearchController : _destinationSearchController,
+              googleAPIKey: "AIzaSyD4UAtE_r8JjBbd0o5qfv3ZSPX_8xkNJ7c",
+              inputDecoration: InputDecoration(
+                hintText: "Search for a $title location",
+                border: OutlineInputBorder(),
+              ),
+              debounceTime: 800,
+              countries: ["ph"],
+              isLatLngRequired: true,
+              getPlaceDetailWithLatLng: (Prediction prediction) {
+                _updateLocation(prediction, locationType);
+              },
+              itemClick: (Prediction prediction) {
+                _updateLocation(prediction, locationType);
+              },
+            ),
+            SizedBox(height: 8),
             Text(
               address,
               style: GoogleFonts.poppins(fontSize: 14, color: Colors.black54),
@@ -397,6 +417,19 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
         ),
       ),
     );
+  }
+
+  void _updateLocation(Prediction prediction, String locationType) {
+    if (prediction.lat != null && prediction.lng != null) {
+      final lat = double.parse(prediction.lat!);
+      final lng = double.parse(prediction.lng!);
+      final newPosition = LatLng(lat, lng);
+      _addMarker(newPosition, locationType);
+    }
+  }
+
+  void _onMapTap(LatLng position, String locationType) {
+    _addMarker(position, locationType);
   }
 
   Widget _buildSubmitButton(String serviceType) {
@@ -528,6 +561,7 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
         }
         return null;
       },
+      enabled: label != 'Email', // Disable editing for the email field
     );
   }
 
@@ -541,3 +575,4 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
     );
   }
 }
+
