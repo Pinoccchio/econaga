@@ -8,6 +8,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
+import 'package:intl/intl.dart';
 import '../../../designs/app_colors.dart';
 import '../client_garbage_collection_screen/approval_dialog.dart';
 
@@ -58,6 +59,9 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
     southwest: LatLng(13.5500, 123.1500),
     northeast: LatLng(13.6934, 123.2397),
   );
+
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
 
   @override
   void initState() {
@@ -323,6 +327,126 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
     );
   }
 
+  Widget _buildDateTimeSection() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: AppColors.cardColor,
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Request Date and Time',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textColor,
+              ),
+            ),
+            SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    readOnly: true,
+                    controller: TextEditingController(
+                      text: _selectedDate == null
+                          ? ''
+                          : DateFormat('yyyy-MM-dd').format(_selectedDate!),
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Date',
+                      suffixIcon: Icon(Icons.calendar_today, color: AppColors.primaryColor),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onTap: () async {
+                      final DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate ?? DateTime.now(),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime(2100),
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context).copyWith(
+                              colorScheme: ColorScheme.light(
+                                primary: AppColors.primaryColor,
+                                onPrimary: Colors.white,
+                                onSurface: AppColors.primaryColor,
+                              ),
+                              textButtonTheme: TextButtonThemeData(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.primaryColor,
+                                ),
+                              ),
+                            ),
+                            child: child!,
+                          );
+                        },
+                      );
+                      if (picked != null && picked != _selectedDate) {
+                        setState(() {
+                          _selectedDate = picked;
+                        });
+                      }
+                    },
+                  ),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    readOnly: true,
+                    controller: TextEditingController(
+                      text: _selectedTime?.format(context) ?? '',
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Time',
+                      suffixIcon: Icon(Icons.access_time, color: AppColors.primaryColor),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onTap: () async {
+                      final TimeOfDay? picked = await showTimePicker(
+                        context: context,
+                        initialTime: _selectedTime ?? TimeOfDay.now(),
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context).copyWith(
+                              colorScheme: ColorScheme.light(
+                                primary: AppColors.primaryColor,
+                                onPrimary: Colors.white,
+                                onSurface: AppColors.primaryColor,
+                              ),
+                              textButtonTheme: TextButtonThemeData(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.primaryColor,
+                                ),
+                              ),
+                            ),
+                            child: child!,
+                          );
+                        },
+                      );
+                      if (picked != null && picked != _selectedTime) {
+                        setState(() {
+                          _selectedTime = picked;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -354,6 +478,8 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
                 _buildPersonalInfoSection(),
                 SizedBox(height: 24),
                 _buildLocationSection(),
+                SizedBox(height: 24),
+                _buildDateTimeSection(),
                 SizedBox(height: 24),
                 _buildNoteSection(),
                 SizedBox(height: 24),
@@ -603,6 +729,20 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
         return;
       }
 
+      if (_selectedDate == null || _selectedTime == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Please select both date and time for the request.',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
       try {
         Map<String, dynamic> requestData = {
           'user_id': widget.userId,
@@ -625,6 +765,13 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
           'created_at': FieldValue.serverTimestamp(),
           'user_type': _isExternalClient ? 'external' : 'official',
           'service_type': _serviceType,
+          'requested_date_time': Timestamp.fromDate(DateTime(
+            _selectedDate!.year,
+            _selectedDate!.month,
+            _selectedDate!.day,
+            _selectedTime!.hour,
+            _selectedTime!.minute,
+          )),
         };
 
         String collectionName = _serviceType == 'burial' ? 'BURIAL_REQUESTS' : 'TRANSPORTATION_REQUESTS';

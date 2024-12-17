@@ -2,14 +2,90 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'approve_service_screen/garbage_service_request.dart';
 import 'completed_collections_viewer.dart';
 
-class CollectorHomePage extends StatelessWidget {
+class CollectorHomePage extends StatefulWidget {
   final String userId;
 
   CollectorHomePage({required this.userId});
+
+  @override
+  _CollectorHomePageState createState() => _CollectorHomePageState();
+}
+
+class _CollectorHomePageState extends State<CollectorHomePage> {
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  FlutterLocalNotificationsPlugin();
+  late SharedPreferences prefs;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeNotifications();
+    _initSharedPreferences();
+  }
+
+  Future<void> _initSharedPreferences() async {
+    prefs = await SharedPreferences.getInstance();
+  }
+
+  Future<void> _initializeNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+    AndroidInitializationSettings('@mipmap/ic_launcher');
+    final InitializationSettings initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+    );
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  }
+
+  Future<void> _showNotification(String title, String body) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+    AndroidNotificationDetails(
+      'new_requests',
+      'New Requests',
+      channelDescription: 'Notifications for new approved requests',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+    const NotificationDetails platformChannelSpecifics =
+    NotificationDetails(android: androidPlatformChannelSpecifics);
+    await flutterLocalNotificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      platformChannelSpecifics,
+    );
+  }
+
+  Future<void> _updateLastFetchedCount(int newCount) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('lastFetchedCount', newCount);
+  }
+
+  void _handleApprovedRequests(int currentCount) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    int lastFetchedCount = prefs.getInt('lastFetchedCount') ?? 0;
+
+    if (currentCount > lastFetchedCount) {
+      int newRequests = currentCount - lastFetchedCount;
+      _showNotification(
+        'New Approved Request(s)',
+        'You have $newRequests new approved request(s) in your collection zone.',
+      );
+    } else if (currentCount < lastFetchedCount) {
+      _showNotification(
+        'Requests Updated',
+        'Some approved requests have been updated or removed.',
+      );
+    }
+
+    _updateLastFetchedCount(currentCount);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +125,7 @@ class CollectorHomePage extends StatelessWidget {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
           .collection('USERS_ACCOUNTS')
-          .doc(userId)
+          .doc(widget.userId)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -206,7 +282,7 @@ class CollectorHomePage extends StatelessWidget {
             'approved',
             'Approved\nRequests',
             'lib/components/assets/images/trashcan-collector.png',
-            GarbageServiceRequest(),
+            GarbageServiceRequest(userId: widget.userId),
           ),
         ),
         SizedBox(width: 16),
@@ -226,27 +302,71 @@ class CollectorHomePage extends StatelessWidget {
 
   Widget _buildStatCard(BuildContext context, String collection, String status,
       String label, String imagePath, Widget destinationPage) {
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
-          .collection(collection)
-          .where('status', isEqualTo: status)
+          .collection('USERS_ACCOUNTS')
+          .doc(widget.userId)
           .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+      builder: (context, userSnapshot) {
+        if (!userSnapshot.hasData) {
           return _buildStatCardContent('...', label, imagePath);
         }
-        if (snapshot.hasError) {
-          return _buildStatCardContent('Error', label, imagePath);
+
+        var userData = userSnapshot.data!.data() as Map<String, dynamic>;
+        var collectionZone = userData['collection_zone']?['coordinates'] as GeoPoint?;
+
+        if (collectionZone == null) {
+          return _buildStatCardContent('N/A', label, imagePath);
         }
-        int count = snapshot.data?.docs.length ?? 0;
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => destinationPage),
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection(collection)
+              .where('status', isEqualTo: status)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return _buildStatCardContent('...', label, imagePath);
+            }
+            if (snapshot.hasError) {
+              return _buildStatCardContent('Error', label, imagePath);
+            }
+
+            int count = snapshot.data?.docs.where((doc) {
+              var data = doc.data() as Map<String, dynamic>;
+              if (data['location'] == null ||
+                  data['location']['latitude'] == null ||
+                  data['location']['longitude'] == null) {
+                return false;
+              }
+
+              double requestLat = data['location']['latitude'];
+              double requestLng = data['location']['longitude'];
+
+              double distance = Geolocator.distanceBetween(
+                collectionZone.latitude,
+                collectionZone.longitude,
+                requestLat,
+                requestLng,
+              );
+
+              return distance <= 1000;
+            }).length ?? 0;
+
+            if (status == 'approved') {
+              _handleApprovedRequests(count);
+            }
+
+            return GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => destinationPage),
+                );
+              },
+              child: _buildStatCardContent(count.toString(), label, imagePath),
             );
           },
-          child: _buildStatCardContent(count.toString(), label, imagePath),
         );
       },
     );
@@ -335,7 +455,9 @@ class CollectorHomePage extends StatelessWidget {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => GarbageServiceRequest()),
+                MaterialPageRoute(
+                  builder: (context) => GarbageServiceRequest(userId: widget.userId),
+                ),
               );
             },
             icon: Icon(Icons.visibility, color: Color(0xFF2E7D32)),

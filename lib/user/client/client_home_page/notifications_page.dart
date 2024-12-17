@@ -206,8 +206,12 @@ class _NotificationPageState extends State<NotificationPage> with SingleTickerPr
   Widget _buildRequestCard(Map<String, dynamic> request) {
     Color statusColor = _getStatusColor(request['status']);
     final createdAt = request['created_at'] as Timestamp?;
-    final formattedDateTime = createdAt != null
+    final formattedCreatedDateTime = createdAt != null
         ? DateFormat('MM/dd/yyyy hh:mm a').format(createdAt.toDate())
+        : 'N/A';
+    final requestedAt = request['requested_date_time'] as Timestamp?;
+    final formattedRequestedDateTime = requestedAt != null
+        ? DateFormat('MM/dd/yyyy hh:mm a').format(requestedAt.toDate())
         : 'N/A';
 
     return Card(
@@ -230,7 +234,12 @@ class _NotificationPageState extends State<NotificationPage> with SingleTickerPr
             ),
             SizedBox(height: 2),
             Text(
-              'Date & Time: $formattedDateTime',
+              'Created: $formattedCreatedDateTime',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            SizedBox(height: 2),
+            Text(
+              'Requested: $formattedRequestedDateTime',
               style: TextStyle(color: Colors.grey[600]),
             ),
           ],
@@ -258,8 +267,12 @@ class _NotificationPageState extends State<NotificationPage> with SingleTickerPr
 
   void _showRequestDetails(Map<String, dynamic> request) {
     final createdAt = request['created_at'] as Timestamp?;
-    final formattedDateTime = createdAt != null
+    final formattedCreatedDateTime = createdAt != null
         ? DateFormat('MM/dd/yyyy hh:mm a').format(createdAt.toDate())
+        : 'N/A';
+    final requestedAt = request['requested_date_time'] as Timestamp?;
+    final formattedRequestedDateTime = requestedAt != null
+        ? DateFormat('MM/dd/yyyy hh:mm a').format(requestedAt.toDate())
         : 'N/A';
 
     showDialog(
@@ -275,7 +288,8 @@ class _NotificationPageState extends State<NotificationPage> with SingleTickerPr
               children: [
                 _buildDetailHeader(request),
                 Divider(height: 24, color: lightGreen),
-                _buildDetailItem('Request Date', formattedDateTime),
+                _buildDetailItem('Created Date', formattedCreatedDateTime),
+                _buildDetailItem('Requested Date', formattedRequestedDateTime),
                 _buildDetailItem('Status', request['status'], color: _getStatusColor(request['status'])),
                 _buildDetailItem('User Type', request['user_type'] ?? 'N/A'),
                 _buildDetailItem('Name', '${request['first_name']} ${request['last_name']}'),
@@ -387,5 +401,4 @@ class _NotificationPageState extends State<NotificationPage> with SingleTickerPr
     );
   }
 }
-
 

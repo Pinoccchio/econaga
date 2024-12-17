@@ -4,6 +4,10 @@ import 'package:econaga_prj/user/collector/collector_home_screen/approve_service
 import 'garbage_service_request.dart';
 
 class ApproveServicesScreen extends StatelessWidget {
+  final String userId; // Add userId parameter
+
+  ApproveServicesScreen({required this.userId}); // Update constructor
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -79,7 +83,7 @@ class ApproveServicesScreen extends StatelessWidget {
           ),
           SizedBox(height: 16),
           Text(
-            'View Approve Services',
+            'View Approved Services',
             style: GoogleFonts.poppins(
               color: Colors.white,
               fontSize: 18,
@@ -104,7 +108,7 @@ class ApproveServicesScreen extends StatelessWidget {
                 () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => TransportationAndBurialServiceScreen()),
+                MaterialPageRoute(builder: (context) => TransportationAndBurialServiceScreen(userId: userId)),
               );
             },
           ),
@@ -116,7 +120,9 @@ class ApproveServicesScreen extends StatelessWidget {
                 () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => GarbageServiceRequest()),
+                MaterialPageRoute(
+                  builder: (context) => GarbageServiceRequest(userId: userId), // Pass userId here
+                ),
               );
             },
           ),
@@ -177,4 +183,3 @@ class ApproveServicesScreen extends StatelessWidget {
     );
   }
 }
-

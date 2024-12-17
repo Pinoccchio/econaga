@@ -13,8 +13,13 @@ import 'package:econaga_prj/user/collector/collector_home_screen/collector_conta
 import 'package:econaga_prj/user/login_as_screen/login_as_screen.dart';
 import 'package:econaga_prj/user/welcome_screen/welcome_screen.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'components/theme/theme_helper.dart';
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+FlutterLocalNotificationsPlugin();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +35,12 @@ void main() async {
   } catch (e) {
     print('Error initializing Firebase: $e');
   }
+
+  // Request notification permissions
+  await _requestNotificationPermissions();
+
+  // Initialize notifications
+  await _initializeNotifications();
 
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -54,6 +65,27 @@ void main() async {
   );
 
   _checkLocationPermission();
+}
+
+Future<void> _requestNotificationPermissions() async {
+  final status = await Permission.notification.request();
+  if (status.isGranted) {
+    print('Notification permissions granted');
+  } else if (status.isDenied) {
+    print('Notification permissions denied');
+  } else if (status.isPermanentlyDenied) {
+    print('Notification permissions permanently denied, open app settings');
+    await openAppSettings();
+  }
+}
+
+Future<void> _initializeNotifications() async {
+  const AndroidInitializationSettings initializationSettingsAndroid =
+  AndroidInitializationSettings('@mipmap/ic_launcher');
+  final InitializationSettings initializationSettings = InitializationSettings(
+    android: initializationSettingsAndroid,
+  );
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 }
 
 Future<void> _checkLocationPermission() async {

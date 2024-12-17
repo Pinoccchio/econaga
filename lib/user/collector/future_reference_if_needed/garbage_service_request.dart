@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
-import 'garbage_map_screen.dart';
+
+import '../collector_home_screen/approve_service_screen/garbage_map_screen.dart';
 
 class GarbageServiceRequest extends StatefulWidget {
   final String userId;
@@ -14,7 +15,7 @@ class GarbageServiceRequest extends StatefulWidget {
 }
 
 class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
-  String _filterOption = 'Within Zone';
+  String _filterOption = 'All Requests';
   GeoPoint? _collectionZone;
   Position? _currentLocation;
 
@@ -55,21 +56,6 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
     }
   }
 
-  Widget _buildFilterDropdown() {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.green[300]!),
-      ),
-      child: Text(
-        _filterOption,
-        style: GoogleFonts.poppins(color: Colors.green[700], fontSize: 14),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -107,8 +93,19 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
                   ),
                 ),
                 SizedBox(height: 12),
-                _buildFilterDropdown(),
-                SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Filter Requests:',
+                      style: GoogleFonts.poppins(
+                        color: Colors.green[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                    _buildFilterDropdown(),
+                  ],
+                ),
               ],
             ),
           ),
@@ -129,10 +126,6 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
                 final requests = snapshot.data!.docs;
                 final filteredRequests = _filterRequests(requests);
 
-                if (filteredRequests.isEmpty) {
-                  return Center(child: Text('No requests found within the zone.'));
-                }
-
                 return ListView.builder(
                   itemCount: filteredRequests.length,
                   itemBuilder: (context, index) {
@@ -150,8 +143,46 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
     );
   }
 
+  Widget _buildFilterDropdown() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green[300]!),
+      ),
+      child: DropdownButton<String>(
+        value: _filterOption,
+        onChanged: (String? newValue) {
+          if (newValue != null) {
+            setState(() {
+              _filterOption = newValue;
+            });
+          }
+        },
+        items: <String>[
+          'All Requests',
+          'Within Zone',
+          'Close to Zone',
+        ].map<DropdownMenuItem<String>>((String value) {
+          return DropdownMenuItem<String>(
+            value: value,
+            child: Text(value, style: GoogleFonts.poppins(color: Colors.green[700], fontSize: 14)),
+          );
+        }).toList(),
+        icon: Icon(Icons.arrow_drop_down, color: Colors.green[700]),
+        underline: SizedBox(),
+        style: GoogleFonts.poppins(color: Colors.green[700], fontSize: 14),
+        dropdownColor: Colors.white,
+      ),
+    );
+  }
 
   List<QueryDocumentSnapshot> _filterRequests(List<QueryDocumentSnapshot> requests) {
+    if (_filterOption == 'All Requests') {
+      return requests;
+    }
+
     return requests.where((request) {
       final data = request.data() as Map<String, dynamic>;
       if (data['location'] == null ||
@@ -174,7 +205,13 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
         requestLng,
       );
 
-      return distance <= 1000; // Within 1 km
+      if (_filterOption == 'Within Zone') {
+        return distance <= 1000; // Within 1 km
+      } else if (_filterOption == 'Close to Zone') {
+        return distance <= 5000; // Within 5 km
+      }
+
+      return false;
     }).toList();
   }
 

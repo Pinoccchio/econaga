@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -43,17 +42,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _getCurrentLocation();
+    });
   }
 
   void _getCurrentLocation() async {
     Position position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
     );
-    setState(() {
-      _currentLocation = LatLng(position.latitude, position.longitude);
-      _updateMarkers();
-    });
+    if (mounted) {
+      setState(() {
+        _currentLocation = LatLng(position.latitude, position.longitude);
+        _updateMarkers();
+      });
+    }
   }
 
   @override
@@ -65,6 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             expandedHeight: 200.0,
             floating: false,
             pinned: true,
+            backgroundColor: Colors.green.shade800,
             flexibleSpace: FlexibleSpaceBar(
               title: Text(
                 'PROFILE',
@@ -85,7 +89,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.green.withOpacity(0.7)],
+                        colors: [Colors.transparent, Colors.green.shade800.withOpacity(0.7)],
                       ),
                     ),
                   ),
@@ -807,7 +811,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       controller: controller,
       enabled: isEditable,
       decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: Colors.black87),
+        prefixIcon: Icon(icon, color: Colors.green),
         labelText: label,
         hintText: hint,
         labelStyle: GoogleFonts.poppins(color: Colors.black87),
@@ -902,7 +906,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       initialLocation = _selectedLocation!;
     }
 
-    _updateMarkers();
+    setState(() {
+      _markers.clear();
+      if (_currentLocation != null) {
+        _markers.add(Marker(
+          markerId: MarkerId('current_location'),
+          position: _currentLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          infoWindow: InfoWindow(title: 'Current Location'),
+        ));
+      }
+      if (_selectedLocation != null) {
+        _markers.add(Marker(
+          markerId: MarkerId('selected_location'),
+          position: _selectedLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: InfoWindow(title: 'Selected Collection Zone'),
+        ));
+      }
+    });
 
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -929,7 +951,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   isLatLngRequired: true,
                   getPlaceDetailWithLatLng: (Prediction prediction) {
                     if (prediction.lat != null && prediction.lng != null) {
-                      _searchLocation(LatLng(double.parse(prediction.lat!), double.parse(prediction.lng!)));
+                      LatLng searchedLocation = LatLng(double.parse(prediction.lat!), double.parse(prediction.lng!));
+                      _handleSearchResult(searchedLocation);
                     }
                   },
                   itemClick: (Prediction prediction) {
@@ -950,9 +973,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _mapController = controller;
                   },
                   markers: _markers,
-                  onTap: (LatLng location) {
-                    _showConfirmDialog(context, location);
-                  },
+                  onTap: _searchLocation,
                 ),
               ),
             ],
@@ -975,6 +996,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } else {
       controller.text = '';
     }
+  }
+
+  void _updateMarkers({LatLng? searchedLocation}) {
+    if (mounted) {
+      setState(() {
+        _markers.clear();
+
+        if (_currentLocation != null) {
+          _markers.add(Marker(
+            markerId: MarkerId('current_location'),
+            position: _currentLocation!,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+            infoWindow: InfoWindow(title: 'Current Location'),
+          ));
+        }
+
+        if (_selectedLocation != null) {
+          _markers.add(Marker(
+            markerId: MarkerId('selected_location'),
+            position: _selectedLocation!,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+            infoWindow: InfoWindow(title: 'Selected Collection Zone'),
+          ));
+        }
+
+        if (searchedLocation != null) {
+          _markers.add(Marker(
+            markerId: MarkerId('searched_location'),
+            position: searchedLocation,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            infoWindow: InfoWindow(title: 'Searched Location'),
+            onTap: () {
+              _showConfirmDialog(context, searchedLocation);
+            },
+          ));
+        }
+      });
+    }
+  }
+
+  void _handleSearchResult(LatLng searchedLocation) {
+    _mapController?.animateCamera(CameraUpdate.newLatLngZoom(searchedLocation, 14));
+    _updateMarkers(searchedLocation: searchedLocation);
+  }
+
+  void _searchLocation(LatLng location) {
+    _mapController?.animateCamera(CameraUpdate.newLatLng(location));
+    if (mounted) {
+      setState(() {
+        _selectedLocation = location;
+        _updateMarkers(searchedLocation: location);
+      });
+    }
+    _showConfirmDialog(context, location);
   }
 
   void _showConfirmDialog(BuildContext context, LatLng location) {
@@ -1019,6 +1094,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _selectedLocation = location;
                   _updateMarkers();
                 });
+                _mapController?.animateCamera(CameraUpdate.newLatLng(_selectedLocation!));
                 Navigator.of(context).pop();
               },
               style: TextButton.styleFrom(
@@ -1034,38 +1110,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _updateMarkers() {
-    setState(() {
-      _markers.clear();
-
-      if (_currentLocation != null) {
-        _markers.add(Marker(
-          markerId: MarkerId('current_location'),
-          position: _currentLocation!,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-          infoWindow: InfoWindow(title: 'Current Location'),
-        ));
-      }
-
-      if (_selectedLocation != null) {
-        _markers.add(Marker(
-          markerId: MarkerId('selected_location'),
-          position: _selectedLocation!,
-          infoWindow: InfoWindow(title: 'Selected Collection Zone'),
-        ));
-      }
-    });
-  }
-
-  void _searchLocation(LatLng location) {
-    _mapController?.animateCamera(CameraUpdate.newLatLng(location));
-    setState(() {
-      _selectedLocation = location;
-      _updateMarkers();
-    });
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
   }
 }
-
-
-
 

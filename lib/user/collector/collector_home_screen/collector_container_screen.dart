@@ -25,7 +25,7 @@ class _CollectorContainerState extends State<CollectorContainer> {
   void initState() {
     super.initState();
     _screens = [
-      ApproveServicesScreen(),
+      ApproveServicesScreen(userId: widget.userId),
       CollectorHomePage(userId: widget.userId),
       ProfileScreen(userId: widget.userId),
     ];

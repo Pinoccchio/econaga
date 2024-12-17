@@ -282,6 +282,7 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
     String firstName = data['first_name'] ?? '';
     String lastName = data['last_name'] ?? '';
     DateTime requestDate = (data['created_at'] as Timestamp).toDate();
+    DateTime requestedDateTime = (data['requested_date_time'] as Timestamp).toDate();
     String status = data['status'] ?? 'pending';
 
     return Container(
@@ -329,7 +330,14 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
                   ),
                   SizedBox(height: 4),
                   Text(
-                    DateFormat('d/MM/yyyy').format(requestDate),
+                    'Created: ${DateFormat('MM/dd/yyyy').format(requestDate)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  Text(
+                    'Requested: ${DateFormat('MM/dd/yyyy hh:mm a').format(requestedDateTime)}',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey[600],
@@ -593,13 +601,10 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
                   _buildDetailItem("Email", data['email'] ?? 'N/A'),
                   _buildDetailItem("Contact Number", data['contact_number'] ?? 'N/A'),
                   _buildDetailItem("Pickup Address", pickupLocation['address'] ?? 'N/A'),
-                  _buildDetailItem("Pickup Latitude", pickupLocation['latitude']?.toString() ?? 'N/A'),
-                  _buildDetailItem("Pickup Longitude", pickupLocation['longitude']?.toString() ?? 'N/A'),
                   _buildDetailItem("Destination Address", destinationLocation['address'] ?? 'N/A'),
-                  _buildDetailItem("Destination Latitude", destinationLocation['latitude']?.toString() ?? 'N/A'),
-                  _buildDetailItem("Destination Longitude", destinationLocation['longitude']?.toString() ?? 'N/A'),
                   _buildDetailItem("Status", data['status'] ?? 'pending'),
                   _buildDetailItem("Date", DateFormat('MM/dd/yyyy').format((data['created_at'] as Timestamp).toDate())),
+                  _buildDetailItem("Requested Date/Time", DateFormat('MM/dd/yyyy hh:mm a').format((data['requested_date_time'] as Timestamp).toDate())),
                   SizedBox(height: 24),
                   TextButton(
                     child: Text(
@@ -646,3 +651,4 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
     );
   }
 }
+

@@ -2,22 +2,117 @@ import 'package:econaga_prj/user/collector/collector_home_screen/approve_service
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:rxdart/rxdart.dart';
+import 'package:geolocator/geolocator.dart';
 
-class TransportationAndBurialServiceScreen extends StatelessWidget {
+class TransportationAndBurialServiceScreen extends StatefulWidget {
+  final String userId;
+
+  const TransportationAndBurialServiceScreen({Key? key, required this.userId}) : super(key: key);
+
+  @override
+  State<TransportationAndBurialServiceScreen> createState() => _TransportationAndBurialServiceScreenState();
+}
+
+class _TransportationAndBurialServiceScreenState extends State<TransportationAndBurialServiceScreen> {
+  String _filterOption = 'Within Zone'; // Update 1
+  GeoPoint? _collectionZone;
+  Position? _currentLocation;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCollectionZone();
+    _getCurrentLocation();
+  }
+
+  Future<void> _loadCollectionZone() async {
+    DocumentSnapshot userDoc = await FirebaseFirestore.instance
+        .collection('USERS_ACCOUNTS')
+        .doc(widget.userId)
+        .get();
+
+    if (userDoc.exists) {
+      var userData = userDoc.data() as Map<String, dynamic>;
+      if (userData['collection_zone'] != null &&
+          userData['collection_zone']['coordinates'] != null) {
+        setState(() {
+          _collectionZone = userData['collection_zone']['coordinates'];
+        });
+      }
+    }
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      setState(() {
+        _currentLocation = position;
+      });
+    } catch (e) {
+      print("Error getting current location: $e");
+    }
+  }
+
+  List<QueryDocumentSnapshot> _filterRequests(List<QueryDocumentSnapshot> requests) {
+    return requests.where((request) {
+      final data = request.data() as Map<String, dynamic>;
+      if (data['pickup_location'] == null ||
+          data['pickup_location']['latitude'] == null ||
+          data['pickup_location']['longitude'] == null) {
+        return false;
+      }
+
+      double requestLat = data['pickup_location']['latitude'];
+      double requestLng = data['pickup_location']['longitude'];
+
+      if (_collectionZone == null) {
+        return false;
+      }
+
+      double distance = Geolocator.distanceBetween(
+        _collectionZone!.latitude,
+        _collectionZone!.longitude,
+        requestLat,
+        requestLng,
+      );
+
+      return distance <= 1000; // Within 1 km // Update 3
+    }).toList();
+  }
+
+  Widget _buildFilterDropdown() { // Update 2
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green[300]!),
+      ),
+      child: Text(
+        _filterOption,
+        style: GoogleFonts.poppins(color: Colors.green[700], fontSize: 14),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.green[50],
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.green[600],
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
           'Approved Requests',
           style: GoogleFonts.poppins(
-            color: Colors.black,
+            color: Colors.white,
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
@@ -26,19 +121,40 @@ class TransportationAndBurialServiceScreen extends StatelessWidget {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
+          Container(
             padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Transportation and Burial Service Requests',
-              style: GoogleFonts.poppins(
-                color: Colors.grey[600],
-                fontSize: 14,
-              ),
+            color: Colors.green[100],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Transportation and Burial Service Requests',
+                  style: GoogleFonts.poppins(
+                    color: Colors.green[800],
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Filter Requests:',
+                      style: GoogleFonts.poppins(
+                        color: Colors.green[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                    _buildFilterDropdown(),
+                  ],
+                ),
+              ],
             ),
           ),
           Expanded(
             child: StreamBuilder<List<QuerySnapshot>>(
-              stream: CombinedStream.combine([
+              stream: Rx.combineLatest2(
                 FirebaseFirestore.instance
                     .collection('TRANSPORTATION_REQUESTS')
                     .where('status', isEqualTo: 'approved')
@@ -47,23 +163,39 @@ class TransportationAndBurialServiceScreen extends StatelessWidget {
                     .collection('BURIAL_REQUESTS')
                     .where('status', isEqualTo: 'approved')
                     .snapshots(),
-              ]),
+                    (QuerySnapshot a, QuerySnapshot b) => [a, b],
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
+                  return Center(child: CircularProgressIndicator(color: Colors.green[600]));
                 }
                 if (!snapshot.hasData || snapshot.data!.every((qs) => qs.docs.isEmpty)) {
-                  return Center(child: Text('No approved requests found.'));
+                  return Center(
+                    child: Text(
+                      'No approved requests found.',
+                      style: GoogleFonts.poppins(color: Colors.green[800]),
+                    ),
+                  );
                 }
 
                 List<QueryDocumentSnapshot> allRequests = [];
                 snapshot.data!.forEach((qs) => allRequests.addAll(qs.docs));
 
-                return ListView.separated(
-                  itemCount: allRequests.length,
-                  separatorBuilder: (context, index) => Divider(height: 1),
+                final filteredRequests = _filterRequests(allRequests);
+
+                if (filteredRequests.isEmpty) { // Update 4
+                  return Center(
+                    child: Text(
+                      'No requests found within the zone.',
+                      style: GoogleFonts.poppins(color: Colors.green[800]),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  itemCount: filteredRequests.length,
                   itemBuilder: (context, index) {
-                    final request = allRequests[index];
+                    final request = filteredRequests[index];
                     final data = request.data() as Map<String, dynamic>;
                     data['request_id'] = request.id;
                     data['request_type'] = request.reference.parent.id == 'TRANSPORTATION_REQUESTS'
@@ -118,59 +250,68 @@ class TransportationAndBurialServiceScreen extends StatelessWidget {
       BuildContext context,
       String? profilePicture,
       ) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundImage: profilePicture != null ? NetworkImage(profilePicture) : null,
-        backgroundColor: profilePicture == null ? Colors.grey : Colors.transparent,
-        child: profilePicture == null
-            ? Text(
-          initials,
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        contentPadding: EdgeInsets.all(16),
+        leading: CircleAvatar(
+          radius: 30,
+          backgroundImage: profilePicture != null ? NetworkImage(profilePicture) : null,
+          backgroundColor: profilePicture == null ? Colors.green[300] : Colors.transparent,
+          child: profilePicture == null
+              ? Text(
+            initials,
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          )
+              : null,
+        ),
+        title: Text(
+          '${data['first_name']} ${data['last_name']}',
           style: GoogleFonts.poppins(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
+            color: Colors.green[800],
           ),
-        )
-            : null,
-      ),
-      title: Text(
-        '${data['first_name']} ${data['last_name']}',
-        style: GoogleFonts.poppins(
-          fontWeight: FontWeight.w600,
         ),
-      ),
-      subtitle: Text(
-        details,
-        style: GoogleFonts.poppins(
-          color: Colors.grey[600],
-          fontSize: 12,
+        subtitle: Text(
+          details,
+          style: GoogleFonts.poppins(
+            color: Colors.green[600],
+            fontSize: 12,
+          ),
         ),
-      ),
-      trailing: PopupMenuButton<String>(
-        onSelected: (value) {
-          if (value == 'Details') {
-            _showDetailsDialog(context, data, profilePicture);
-          } else if (value == 'Visit') {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => TransportationAndBurialMapScreen(userData: data),
+        trailing: PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'Details') {
+              _showDetailsDialog(context, data, profilePicture);
+            } else if (value == 'Visit') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => TransportationAndBurialMapScreen(userData: data),
+                ),
+              );
+            }
+          },
+          itemBuilder: (BuildContext context) {
+            return [
+              PopupMenuItem(
+                value: 'Details',
+                child: Text('Details', style: GoogleFonts.poppins(color: Colors.green[800])),
               ),
-            );
-          }
-        },
-        itemBuilder: (BuildContext context) {
-          return [
-            PopupMenuItem(
-              value: 'Details',
-              child: Text('Details', style: GoogleFonts.poppins()),
-            ),
-            PopupMenuItem(
-              value: 'Visit',
-              child: Text('Visit', style: GoogleFonts.poppins()),
-            ),
-          ];
-        },
-        icon: Icon(Icons.more_vert),
+              PopupMenuItem(
+                value: 'Visit',
+                child: Text('Visit', style: GoogleFonts.poppins(color: Colors.green[800])),
+              ),
+            ];
+          },
+          icon: Icon(Icons.more_vert, color: Colors.green[600]),
+        ),
       ),
     );
   }
@@ -180,11 +321,13 @@ class TransportationAndBurialServiceScreen extends StatelessWidget {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
             '${data['first_name']} ${data['last_name']}',
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.bold,
               fontSize: 18,
+              color: Colors.green[800],
             ),
           ),
           content: SingleChildScrollView(
@@ -195,7 +338,7 @@ class TransportationAndBurialServiceScreen extends StatelessWidget {
                   child: CircleAvatar(
                     radius: 50,
                     backgroundImage: profilePicture != null ? NetworkImage(profilePicture) : null,
-                    backgroundColor: profilePicture == null ? Colors.grey : Colors.transparent,
+                    backgroundColor: profilePicture == null ? Colors.green[300] : Colors.transparent,
                     child: profilePicture == null
                         ? Text(
                       '${data['first_name'][0]}${data['last_name'][0]}',
@@ -211,7 +354,7 @@ class TransportationAndBurialServiceScreen extends StatelessWidget {
                 SizedBox(height: 20),
                 RichText(
                   text: TextSpan(
-                    style: GoogleFonts.poppins(fontSize: 14, color: Colors.black),
+                    style: GoogleFonts.poppins(fontSize: 14, color: Colors.green[800]),
                     children: [
                       TextSpan(text: 'Request Type: ', style: TextStyle(fontWeight: FontWeight.bold)),
                       TextSpan(text: '${data['request_type']}\n'),
@@ -239,7 +382,8 @@ class TransportationAndBurialServiceScreen extends StatelessWidget {
               child: Text(
                 'Close',
                 style: GoogleFonts.poppins(
-                  color: Colors.blue,
+                  color: Colors.green[700],
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
@@ -247,12 +391,6 @@ class TransportationAndBurialServiceScreen extends StatelessWidget {
         );
       },
     );
-  }
-}
-
-class CombinedStream {
-  static Stream<List<T>> combine<T>(List<Stream<T>> streams) {
-    return Stream.fromFuture(Future.wait(streams.map((s) => s.first)));
   }
 }
 

@@ -8,11 +8,8 @@ import 'package:geocoding/geocoding.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-
-import '../../../designs/app_colors.dart';
+import 'package:intl/intl.dart';
 import 'approval_dialog.dart';
-
 
 class ClientGarbageCollectionScreen extends StatefulWidget {
   final String userId;
@@ -46,7 +43,8 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
   String _note = '';
 
   bool _isExternalClient = false;
-
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
 
   final LatLngBounds _nagaCityBounds = LatLngBounds(
     southwest: LatLng(13.5500, 123.1500),
@@ -187,7 +185,6 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
     }
   }
 
-
   Widget _buildMapSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,7 +274,6 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -309,6 +305,8 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
                 _buildPersonalInfoSection(),
                 SizedBox(height: 24),
                 _buildLocationSection(),
+                SizedBox(height: 24),
+                _buildDateTimeSection(),
                 SizedBox(height: 24),
                 _buildNoteSection(),
                 SizedBox(height: 24),
@@ -412,6 +410,128 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
     );
   }
 
+  Widget _buildDateTimeSection() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: AppColors.cardColor,
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Request Date and Time',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textColor,
+              ),
+            ),
+            SizedBox(height: 16),
+            Row(
+              children: [
+                // Date Picker
+                Expanded(
+                  child: TextFormField(
+                    readOnly: true,
+                    controller: TextEditingController(
+                      text: _selectedDate == null
+                          ? ''
+                          : DateFormat('yyyy-MM-dd').format(_selectedDate!),
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Date',
+                      suffixIcon: Icon(Icons.calendar_today, color: Colors.green),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onTap: () async {
+                      final DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate ?? DateTime.now(),
+                        firstDate: DateTime.now(),  // Restricts past dates
+                        lastDate: DateTime(2100),
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context).copyWith(
+                              colorScheme: ColorScheme.light(
+                                primary: Colors.green,    // Header background
+                                onPrimary: Colors.white,  // Header text
+                                onSurface: Colors.green,  // Body text
+                              ),
+                              textButtonTheme: TextButtonThemeData(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.green,  // Button text
+                                ),
+                              ),
+                            ),
+                            child: child!,
+                          );
+                        },
+                      );
+                      if (picked != null && picked != _selectedDate) {
+                        setState(() {
+                          _selectedDate = picked;
+                        });
+                      }
+                    },
+                  ),
+                ),
+                SizedBox(width: 16),
+                // Time Picker
+                Expanded(
+                  child: TextFormField(
+                    readOnly: true,
+                    controller: TextEditingController(
+                      text: _selectedTime?.format(context) ?? '',
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Time',
+                      suffixIcon: Icon(Icons.access_time, color: Colors.green),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onTap: () async {
+                      final TimeOfDay? picked = await showTimePicker(
+                        context: context,
+                        initialTime: _selectedTime ?? TimeOfDay.now(),
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context).copyWith(
+                              colorScheme: ColorScheme.light(
+                                primary: Colors.green,    // Header background
+                                onPrimary: Colors.white,  // Header text
+                                onSurface: Colors.green,  // Body text
+                              ),
+                              textButtonTheme: TextButtonThemeData(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.green,  // Button text
+                                ),
+                              ),
+                            ),
+                            child: child!,
+                          );
+                        },
+                      );
+                      if (picked != null && picked != _selectedTime) {
+                        setState(() {
+                          _selectedTime = picked;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildNoteSection() {
     return Card(
@@ -489,7 +609,29 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
         return;
       }
 
+      if (_selectedDate == null || _selectedTime == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Please select both date and time for the request.',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
       try {
+        DateTime requestDateTime = DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          _selectedTime!.hour,
+          _selectedTime!.minute,
+        );
+
         Map<String, dynamic> requestData = {
           'user_id': widget.userId,
           'first_name': _firstNameController.text,
@@ -504,6 +646,7 @@ class _ClientGarbageCollectionScreenState extends State<ClientGarbageCollectionS
           'note': _note.isNotEmpty ? _note : null,
           'status': 'pending',
           'created_at': FieldValue.serverTimestamp(),
+          'requested_date_time': Timestamp.fromDate(requestDateTime),
           'user_type': _isExternalClient ? 'external' : 'official',
         };
 
@@ -592,5 +735,6 @@ class AppColors {
   static const Color backgroundColor = Color(0xFFF1F8E9);
   static const Color textColor = Color(0xFF333333);
   static const Color cardColor = Colors.white;
+  static const Color calendarColor = Color(0xFF66BB6A);
 }
 

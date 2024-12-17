@@ -1,20 +1,21 @@
+import 'package:econaga_prj/user/collector/collector_home_screen/approve_service_screen/transporation_and_burial_map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:rxdart/rxdart.dart';
 import 'package:geolocator/geolocator.dart';
-import 'garbage_map_screen.dart';
 
-class GarbageServiceRequest extends StatefulWidget {
+class TransportationAndBurialServiceScreen extends StatefulWidget {
   final String userId;
 
-  GarbageServiceRequest({required this.userId});
+  const TransportationAndBurialServiceScreen({Key? key, required this.userId}) : super(key: key);
 
   @override
-  _GarbageServiceRequestState createState() => _GarbageServiceRequestState();
+  State<TransportationAndBurialServiceScreen> createState() => _TransportationAndBurialServiceScreenState();
 }
 
-class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
-  String _filterOption = 'Within Zone';
+class _TransportationAndBurialServiceScreenState extends State<TransportationAndBurialServiceScreen> {
+  String _filterOption = 'All Requests';
   GeoPoint? _collectionZone;
   Position? _currentLocation;
 
@@ -55,6 +56,43 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
     }
   }
 
+  List<QueryDocumentSnapshot> _filterRequests(List<QueryDocumentSnapshot> requests) {
+    if (_filterOption == 'All Requests') {
+      return requests;
+    }
+
+    return requests.where((request) {
+      final data = request.data() as Map<String, dynamic>;
+      if (data['pickup_location'] == null ||
+          data['pickup_location']['latitude'] == null ||
+          data['pickup_location']['longitude'] == null) {
+        return false;
+      }
+
+      double requestLat = data['pickup_location']['latitude'];
+      double requestLng = data['pickup_location']['longitude'];
+
+      if (_collectionZone == null) {
+        return false;
+      }
+
+      double distance = Geolocator.distanceBetween(
+        _collectionZone!.latitude,
+        _collectionZone!.longitude,
+        requestLat,
+        requestLng,
+      );
+
+      if (_filterOption == 'Within Zone') {
+        return distance <= 1000; // Within 1 km
+      } else if (_filterOption == 'Close to Zone') {
+        return distance <= 5000; // Within 5 km
+      }
+
+      return false;
+    }).toList();
+  }
+
   Widget _buildFilterDropdown() {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -63,9 +101,29 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.green[300]!),
       ),
-      child: Text(
-        _filterOption,
+      child: DropdownButton<String>(
+        value: _filterOption,
+        onChanged: (String? newValue) {
+          if (newValue != null) {
+            setState(() {
+              _filterOption = newValue;
+            });
+          }
+        },
+        items: <String>[
+          'All Requests',
+          'Within Zone',
+          'Close to Zone',
+        ].map<DropdownMenuItem<String>>((String value) {
+          return DropdownMenuItem<String>(
+            value: value,
+            child: Text(value, style: GoogleFonts.poppins(color: Colors.green[700], fontSize: 14)),
+          );
+        }).toList(),
+        icon: Icon(Icons.arrow_drop_down, color: Colors.green[700]),
+        underline: SizedBox(),
         style: GoogleFonts.poppins(color: Colors.green[700], fontSize: 14),
+        dropdownColor: Colors.white,
       ),
     );
   }
@@ -75,7 +133,7 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
     return Scaffold(
       backgroundColor: Colors.green[50],
       appBar: AppBar(
-        backgroundColor: Colors.green,
+        backgroundColor: Colors.green[600],
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: Colors.white),
@@ -93,52 +151,76 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
+          Container(
             padding: const EdgeInsets.all(16.0),
+            color: Colors.green[100],
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Garbage Collection Service',
+                  'Transportation and Burial Service Requests',
                   style: GoogleFonts.poppins(
                     color: Colors.green[800],
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 SizedBox(height: 12),
-                _buildFilterDropdown(),
-                SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Filter Requests:',
+                      style: GoogleFonts.poppins(
+                        color: Colors.green[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                    _buildFilterDropdown(),
+                  ],
+                ),
               ],
             ),
           ),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('GARBAGE_REQUESTS')
-                  .where('status', isEqualTo: 'approved')
-                  .snapshots(),
+            child: StreamBuilder<List<QuerySnapshot>>(
+              stream: Rx.combineLatest2(
+                FirebaseFirestore.instance
+                    .collection('TRANSPORTATION_REQUESTS')
+                    .where('status', isEqualTo: 'approved')
+                    .snapshots(),
+                FirebaseFirestore.instance
+                    .collection('BURIAL_REQUESTS')
+                    .where('status', isEqualTo: 'approved')
+                    .snapshots(),
+                    (QuerySnapshot a, QuerySnapshot b) => [a, b],
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
+                  return Center(child: CircularProgressIndicator(color: Colors.green[600]));
                 }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(child: Text('No approved requests found.'));
-                }
-
-                final requests = snapshot.data!.docs;
-                final filteredRequests = _filterRequests(requests);
-
-                if (filteredRequests.isEmpty) {
-                  return Center(child: Text('No requests found within the zone.'));
+                if (!snapshot.hasData || snapshot.data!.every((qs) => qs.docs.isEmpty)) {
+                  return Center(
+                    child: Text(
+                      'No approved requests found.',
+                      style: GoogleFonts.poppins(color: Colors.green[800]),
+                    ),
+                  );
                 }
 
+                List<QueryDocumentSnapshot> allRequests = [];
+                snapshot.data!.forEach((qs) => allRequests.addAll(qs.docs));
+
+                final filteredRequests = _filterRequests(allRequests);
                 return ListView.builder(
                   itemCount: filteredRequests.length,
                   itemBuilder: (context, index) {
                     final request = filteredRequests[index];
                     final data = request.data() as Map<String, dynamic>;
                     data['request_id'] = request.id;
+                    data['request_type'] = request.reference.parent.id == 'TRANSPORTATION_REQUESTS'
+                        ? 'Transportation'
+                        : 'Burial';
                     return _buildRequestTile(data, context);
                   },
                 );
@@ -150,39 +232,15 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
     );
   }
 
-
-  List<QueryDocumentSnapshot> _filterRequests(List<QueryDocumentSnapshot> requests) {
-    return requests.where((request) {
-      final data = request.data() as Map<String, dynamic>;
-      if (data['location'] == null ||
-          data['location']['latitude'] == null ||
-          data['location']['longitude'] == null) {
-        return false;
-      }
-
-      double requestLat = data['location']['latitude'];
-      double requestLng = data['location']['longitude'];
-
-      if (_collectionZone == null) {
-        return false;
-      }
-
-      double distance = Geolocator.distanceBetween(
-        _collectionZone!.latitude,
-        _collectionZone!.longitude,
-        requestLat,
-        requestLng,
-      );
-
-      return distance <= 1000; // Within 1 km
-    }).toList();
-  }
-
   Widget _buildRequestTile(Map<String, dynamic> data, BuildContext context) {
     final initials = '${data['first_name'][0]}${data['last_name'][0]}';
-    final location = data['location']['address'];
+    final pickupLocation = data['pickup_location']?['address'] ?? 'Pickup location not available';
+    final destinationLocation = data['destination_location']?['address'] ?? 'Destination location not available';
+    final contact = data['contact_number'] ?? 'No contact available';
+    final serviceType = data['service_type'] ?? 'No service type specified';
     final note = data['note'] != null ? 'Note: ${data['note']}' : 'No additional notes';
-    final details = '$location\n$note';
+
+    final details = '${data['request_type']} Request\nPickup: $pickupLocation\nDestination: $destinationLocation\nService: $serviceType\nContact: $contact\n$note';
 
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
@@ -205,7 +263,13 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
     );
   }
 
-  Widget _buildListTile(String initials, Map<String, dynamic> data, String details, BuildContext context, String? profilePicture) {
+  Widget _buildListTile(
+      String initials,
+      Map<String, dynamic> data,
+      String details,
+      BuildContext context,
+      String? profilePicture,
+      ) {
     return Card(
       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       elevation: 2,
@@ -249,7 +313,7 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => GarbageMapScreen(userData: data),
+                  builder: (context) => TransportationAndBurialMapScreen(userData: data),
                 ),
               );
             }
@@ -258,15 +322,15 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
             return [
               PopupMenuItem(
                 value: 'Details',
-                child: Text('Details', style: GoogleFonts.poppins()),
+                child: Text('Details', style: GoogleFonts.poppins(color: Colors.green[800])),
               ),
               PopupMenuItem(
                 value: 'Visit',
-                child: Text('Visit', style: GoogleFonts.poppins()),
+                child: Text('Visit', style: GoogleFonts.poppins(color: Colors.green[800])),
               ),
             ];
           },
-          icon: Icon(Icons.more_vert, color: Colors.green[700]),
+          icon: Icon(Icons.more_vert, color: Colors.green[600]),
         ),
       ),
     );
@@ -312,16 +376,16 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
                   text: TextSpan(
                     style: GoogleFonts.poppins(fontSize: 14, color: Colors.green[800]),
                     children: [
+                      TextSpan(text: 'Request Type: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: '${data['request_type']}\n'),
                       TextSpan(text: 'Email: ', style: TextStyle(fontWeight: FontWeight.bold)),
                       TextSpan(text: '${data['email']}\n'),
                       TextSpan(text: 'Contact: ', style: TextStyle(fontWeight: FontWeight.bold)),
                       TextSpan(text: '${data['contact_number']}\n'),
-                      TextSpan(text: 'Location: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                      TextSpan(text: '${data['location']['address']}\n'),
-                      TextSpan(text: 'Latitude: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                      TextSpan(text: '${data['location']['latitude']}\n'),
-                      TextSpan(text: 'Longitude: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                      TextSpan(text: '${data['location']['longitude']}\n'),
+                      TextSpan(text: 'Pickup Location: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: '${data['pickup_location']?['address'] ?? 'No pickup location'}\n'),
+                      TextSpan(text: 'Destination Location: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: '${data['destination_location']?['address'] ?? 'No destination location'}\n'),
                       TextSpan(text: 'Note: ', style: TextStyle(fontWeight: FontWeight.bold)),
                       TextSpan(text: '${data['note'] ?? 'No additional notes'}'),
                     ],
