@@ -11,6 +11,12 @@ class ClientHomePage extends StatelessWidget {
 
   ClientHomePage({required this.onRequestNow, required this.userId});
 
+  // Modern green color palette
+  static const Color primaryGreen = Color(0xFF4CAF50);
+  static const Color lightGreen = Color(0xFFAED581);
+  static const Color darkGreen = Color(0xFF388E3C);
+  static const Color accentGreen = Color(0xFF69F0AE);
+
   @override
   Widget build(BuildContext context) {
     final List<String> imagePaths = [
@@ -71,8 +77,8 @@ class ClientHomePage extends StatelessWidget {
 
   Widget _buildLoadingShimmer() {
     return Shimmer.fromColors(
-      baseColor: Colors.grey[300]!,
-      highlightColor: Colors.grey[100]!,
+      baseColor: lightGreen.withOpacity(0.3),
+      highlightColor: lightGreen.withOpacity(0.1),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -96,10 +102,11 @@ class ClientHomePage extends StatelessWidget {
       expandedHeight: 200.0,
       floating: false,
       pinned: true,
+      backgroundColor: primaryGreen,
       flexibleSpace: FlexibleSpaceBar(
         title: Text(
           'EcoNaga',
-          style: GoogleFonts.lato(
+          style: GoogleFonts.montserrat(
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
@@ -116,7 +123,7 @@ class ClientHomePage extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+                  colors: [Colors.transparent, darkGreen.withOpacity(0.8)],
                 ),
               ),
             ),
@@ -132,29 +139,29 @@ class ClientHomePage extends StatelessWidget {
       children: [
         Text(
           'Welcome back,',
-          style: GoogleFonts.lato(
+          style: GoogleFonts.montserrat(
             fontSize: 24,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             color: Colors.black87,
           ),
         ),
         Text(
           '${userData['first_name']} ${userData['last_name']}',
-          style: GoogleFonts.lato(
+          style: GoogleFonts.montserrat(
             fontSize: 28,
             fontWeight: FontWeight.bold,
-            color: Colors.green,
+            color: primaryGreen,
           ),
         ),
         SizedBox(height: 8),
         Row(
           children: [
-            Icon(Icons.location_on, color: Colors.black54, size: 18),
+            Icon(Icons.location_on, color: darkGreen, size: 18),
             SizedBox(width: 4),
             Expanded(
               child: Text(
                 userData['address'] ?? 'Address not provided',
-                style: GoogleFonts.lato(
+                style: GoogleFonts.montserrat(
                   fontSize: 14,
                   color: Colors.black54,
                 ),
@@ -171,6 +178,7 @@ class ClientHomePage extends StatelessWidget {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: lightGreen.withOpacity(0.2),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -178,18 +186,18 @@ class ClientHomePage extends StatelessWidget {
           children: [
             Text(
               'Solid Waste Management Office',
-              style: GoogleFonts.lato(
+              style: GoogleFonts.montserrat(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: darkGreen,
               ),
             ),
             SizedBox(height: 8),
             Text(
               'We provide comprehensive solid waste management services for all your needs. Just Email us.',
-              style: GoogleFonts.lato(
+              style: GoogleFonts.montserrat(
                 fontSize: 14,
-                color: Colors.black54,
+                color: Colors.black87,
               ),
             ),
           ],
@@ -216,7 +224,7 @@ class ClientHomePage extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+                colors: [Colors.transparent, darkGreen.withOpacity(0.8)],
               ),
             ),
           ),
@@ -231,16 +239,17 @@ class ClientHomePage extends StatelessWidget {
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+                backgroundColor: accentGreen,
+                foregroundColor: Colors.black87,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(30),
                 ),
                 padding: EdgeInsets.symmetric(vertical: 16),
+                elevation: 0,
               ),
               child: Text(
                 'Request Service Now',
-                style: GoogleFonts.lato(
+                style: GoogleFonts.montserrat(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
@@ -253,29 +262,102 @@ class ClientHomePage extends StatelessWidget {
   }
 
   Widget _buildCarousel(List<String> imagePaths, BuildContext context) {
-    return CarouselSlider.builder(
-      itemCount: imagePaths.length,
-      itemBuilder: (context, index, realIndex) {
-        return Container(
-          margin: EdgeInsets.symmetric(horizontal: 8),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Image.asset(
-              imagePaths[index],
-              fit: BoxFit.cover,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Our Services',
+          style: GoogleFonts.montserrat(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: darkGreen,
+          ),
+        ),
+        SizedBox(height: 16),
+        CarouselSlider.builder(
+          itemCount: imagePaths.length,
+          itemBuilder: (context, index, realIndex) {
+            return GestureDetector(
+              onTap: () => _showFullScreenImage(context, imagePaths[index]),
+              child: Container(
+                margin: EdgeInsets.symmetric(horizontal: 8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.asset(
+                        imagePaths[index],
+                        fit: BoxFit.cover,
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Colors.black.withOpacity(0.5)],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 8,
+                        right: 8,
+                        child: Icon(
+                          Icons.zoom_in,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+          options: CarouselOptions(
+            autoPlay: true,
+            autoPlayInterval: Duration(seconds: 3),
+            autoPlayAnimationDuration: Duration(milliseconds: 800),
+            autoPlayCurve: Curves.fastOutSlowIn,
+            enlargeCenterPage: true,
+            aspectRatio: 16 / 9,
+            viewportFraction: 0.8,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showFullScreenImage(BuildContext context, String imagePath) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Image.asset(
+                  imagePath,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              Positioned(
+                top: 16,
+                right: 16,
+                child: IconButton(
+                  icon: Icon(Icons.close, color: Colors.white, size: 30),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+            ],
           ),
         );
       },
-      options: CarouselOptions(
-        autoPlay: true,
-        autoPlayInterval: Duration(seconds: 3),
-        autoPlayAnimationDuration: Duration(milliseconds: 800),
-        autoPlayCurve: Curves.fastOutSlowIn,
-        enlargeCenterPage: true,
-        aspectRatio: 16 / 9,
-        viewportFraction: 0.8,
-      ),
     );
   }
 }
+

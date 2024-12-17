@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../designs/app_colors.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'ComplaintDetailPage.dart';
 
 class SubmittedComplaintsPage extends StatelessWidget {
@@ -10,21 +10,40 @@ class SubmittedComplaintsPage extends StatelessWidget {
 
   SubmittedComplaintsPage({required this.userId});
 
+  // Modern green color palette
+  static const Color primaryGreen = Color(0xFF4CAF50);
+  static const Color lightGreen = Color(0xFFAED581);
+  static const Color darkGreen = Color(0xFF388E3C);
+  static const Color accentGreen = Color(0xFF69F0AE);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        backgroundColor: AppColors.secondaryGreen,
+        backgroundColor: primaryGreen,
+        elevation: 0,
         title: Text(
           'Your Complaints',
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.montserrat(
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: Colors.white,
           ),
         ),
-        elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh, color: Colors.white),
+            onPressed: () {
+              // Refresh the stream
+              FirebaseFirestore.instance
+                  .collection('complaints')
+                  .where('userId', isEqualTo: userId)
+                  .orderBy('lastMessageTimestamp', descending: true)
+                  .snapshots();
+            },
+          ),
+        ],
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
@@ -34,7 +53,7 @@ class SubmittedComplaintsPage extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator(color: AppColors.secondaryGreen));
+            return Center(child: CircularProgressIndicator(color: primaryGreen));
           }
 
           if (snapshot.hasError) {
@@ -45,12 +64,20 @@ class SubmittedComplaintsPage extends StatelessWidget {
 
           if (complaints.isEmpty) {
             return Center(
-              child: Text(
-                'No complaints submitted yet.',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.inbox, size: 64, color: lightGreen),
+                  SizedBox(height: 16),
+                  Text(
+                    'No complaints submitted yet.',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      color: darkGreen,
+                    ),
+                  ),
+                ],
               ),
             );
           }
@@ -70,12 +97,12 @@ class SubmittedComplaintsPage extends StatelessWidget {
                 child: ListTile(
                   contentPadding: EdgeInsets.all(16),
                   leading: CircleAvatar(
-                    backgroundColor: AppColors.secondaryGreen,
+                    backgroundColor: primaryGreen,
                     child: Icon(Icons.chat, color: Colors.white),
                   ),
                   title: Text(
                     'Complaint to Admin',
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.montserrat(
                       fontWeight: FontWeight.w600,
                       fontSize: 16,
                       color: Colors.black87,
@@ -87,7 +114,7 @@ class SubmittedComplaintsPage extends StatelessWidget {
                       SizedBox(height: 4),
                       Text(
                         complaintData['lastMessage'] ?? 'No messages',
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.montserrat(
                           fontSize: 14,
                           color: Colors.grey[600],
                         ),
@@ -97,14 +124,14 @@ class SubmittedComplaintsPage extends StatelessWidget {
                       SizedBox(height: 4),
                       Text(
                         'Last update: ${_formatTimestamp(complaintData['lastMessageTimestamp'])}',
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.montserrat(
                           fontSize: 12,
                           color: Colors.grey[500],
                         ),
                       ),
                     ],
                   ),
-                  trailing: Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.secondaryGreen),
+                  trailing: Icon(Icons.arrow_forward_ios, size: 16, color: primaryGreen),
                   onTap: () {
                     Navigator.push(
                       context,
@@ -117,7 +144,7 @@ class SubmittedComplaintsPage extends StatelessWidget {
                     );
                   },
                 ),
-              );
+              ).animate().fadeIn(duration: 300.ms, delay: (50 * index).ms).slideX(begin: 0.2, end: 0);
             },
           );
         },
@@ -136,5 +163,4 @@ class SubmittedComplaintsPage extends StatelessWidget {
     }
   }
 }
-
 

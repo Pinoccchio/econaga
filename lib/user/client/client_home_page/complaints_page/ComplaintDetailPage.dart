@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../designs/app_colors.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class ComplaintDetailPage extends StatefulWidget {
   final String complaintId;
@@ -18,20 +18,26 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
+  // Modern green color palette
+  static const Color primaryGreen = Color(0xFF4CAF50);
+  static const Color lightGreen = Color(0xFFAED581);
+  static const Color darkGreen = Color(0xFF388E3C);
+  static const Color accentGreen = Color(0xFF69F0AE);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: AppColors.secondaryGreen,
+        backgroundColor: primaryGreen,
+        elevation: 0,
         title: Text(
           'Complaint Details',
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.montserrat(
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: Colors.white,
           ),
         ),
-        elevation: 0,
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
@@ -40,7 +46,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator(color: AppColors.secondaryGreen));
+            return Center(child: CircularProgressIndicator(color: primaryGreen));
           }
           if (!snapshot.hasData || !snapshot.data!.exists) {
             return Center(child: Text('Complaint not found'));
@@ -64,7 +70,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
                       message['content'],
                       _formatTimestamp(message['timestamp']),
                       isUser: isUser,
-                    );
+                    ).animate().fadeIn(duration: 300.ms, delay: (50 * index).ms).slideY(begin: 0.2, end: 0);
                   },
                 ),
               ),
@@ -83,8 +89,8 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
         margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         padding: EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isUser ? AppColors.secondaryGreen.withOpacity(0.1) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
+          color: isUser ? lightGreen.withOpacity(0.2) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
               color: Colors.grey.withOpacity(0.1),
@@ -100,63 +106,14 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (isUser)
-                  FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance
-                        .collection('USERS_ACCOUNTS')
-                        .doc(widget.userId)
-                        .get(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return CircularProgressIndicator(strokeWidth: 2);
-                      }
-                      if (snapshot.hasError || !snapshot.hasData) {
-                        return CircleAvatar(
-                          radius: 16,
-                          backgroundColor: AppColors.secondaryGreen,
-                          child: Text(
-                            sender[0].toUpperCase(),
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                          ),
-                        );
-                      }
-                      var userData = snapshot.data!.data() as Map<String, dynamic>?;
-                      String? profileImageUrl = userData?['selfieImageUrl'];
-                      return CircleAvatar(
-                        radius: 16,
-                        backgroundImage: profileImageUrl != null
-                            ? NetworkImage(profileImageUrl)
-                            : null,
-                        backgroundColor: AppColors.secondaryGreen,
-                        child: profileImageUrl == null
-                            ? Text(
-                          sender[0].toUpperCase(),
-                          style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        )
-                            : null,
-                      );
-                    },
-                  )
-                else
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundImage: AssetImage('lib/components/assets/images/official_logo.png'),
-                  ),
+                _buildAvatar(sender, isUser),
                 SizedBox(width: 8),
                 Text(
                   sender,
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.montserrat(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
-                    color: isUser ? AppColors.secondaryGreen : Colors.black87,
+                    color: isUser ? darkGreen : primaryGreen,
                   ),
                 ),
               ],
@@ -164,7 +121,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
             SizedBox(height: 4),
             Text(
               message,
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.montserrat(
                 fontSize: 14,
                 color: Colors.black87,
               ),
@@ -172,13 +129,65 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
             SizedBox(height: 4),
             Text(
               timestamp,
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.montserrat(
                 fontSize: 10,
                 color: Colors.grey[600],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAvatar(String sender, bool isUser) {
+    if (isUser) {
+      return FutureBuilder<DocumentSnapshot>(
+        future: FirebaseFirestore.instance
+            .collection('USERS_ACCOUNTS')
+            .doc(widget.userId)
+            .get(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return CircularProgressIndicator(strokeWidth: 2, color: primaryGreen);
+          }
+          if (snapshot.hasError || !snapshot.hasData) {
+            return _defaultAvatar(sender);
+          }
+          var userData = snapshot.data!.data() as Map<String, dynamic>?;
+          String? profileImageUrl = userData?['selfieImageUrl'];
+          return CircleAvatar(
+            radius: 16,
+            backgroundImage: profileImageUrl != null ? NetworkImage(profileImageUrl) : null,
+            backgroundColor: lightGreen,
+            child: profileImageUrl == null ? _defaultAvatarChild(sender) : null,
+          );
+        },
+      );
+    } else {
+      return CircleAvatar(
+        radius: 16,
+        backgroundImage: AssetImage('lib/components/assets/images/official_logo.png'),
+        backgroundColor: primaryGreen,
+      );
+    }
+  }
+
+  Widget _defaultAvatar(String sender) {
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: lightGreen,
+      child: _defaultAvatarChild(sender),
+    );
+  }
+
+  Widget _defaultAvatarChild(String sender) {
+    return Text(
+      sender[0].toUpperCase(),
+      style: GoogleFonts.montserrat(
+        color: darkGreen,
+        fontWeight: FontWeight.w600,
+        fontSize: 12,
       ),
     );
   }
@@ -203,7 +212,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
               controller: _messageController,
               decoration: InputDecoration(
                 hintText: 'Type your message...',
-                hintStyle: GoogleFonts.poppins(
+                hintStyle: GoogleFonts.montserrat(
                   color: Colors.grey[400],
                 ),
                 border: OutlineInputBorder(
@@ -215,13 +224,13 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
                 contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               ),
               maxLines: null,
-              style: GoogleFonts.poppins(),
+              style: GoogleFonts.montserrat(),
             ),
           ),
           SizedBox(width: 16),
           Container(
             decoration: BoxDecoration(
-              color: AppColors.secondaryGreen,
+              color: primaryGreen,
               borderRadius: BorderRadius.circular(30),
             ),
             child: IconButton(
@@ -279,7 +288,6 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     }
   }
 }
-
 
 
 

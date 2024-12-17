@@ -6,7 +6,7 @@ import 'package:rxdart/rxdart.dart';
 class NotificationPage extends StatefulWidget {
   final String userId;
 
-  NotificationPage({required this.userId});
+  const NotificationPage({Key? key, required this.userId}) : super(key: key);
 
   @override
   _NotificationPageState createState() => _NotificationPageState();
@@ -14,135 +14,134 @@ class NotificationPage extends StatefulWidget {
 
 class _NotificationPageState extends State<NotificationPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _pendingSubject = BehaviorSubject<List<Map<String, dynamic>>>.seeded([]);
-  final _approvedSubject = BehaviorSubject<List<Map<String, dynamic>>>.seeded([]);
-  final _declinedSubject = BehaviorSubject<List<Map<String, dynamic>>>.seeded([]);
-  final _completedSubject = BehaviorSubject<List<Map<String, dynamic>>>.seeded([]);
+  final Map<String, BehaviorSubject<List<Map<String, dynamic>>>> _subjects = {
+    'pending': BehaviorSubject<List<Map<String, dynamic>>>.seeded([]),
+    'approved': BehaviorSubject<List<Map<String, dynamic>>>.seeded([]),
+    'declined': BehaviorSubject<List<Map<String, dynamic>>>.seeded([]),
+    'completed': BehaviorSubject<List<Map<String, dynamic>>>.seeded([]),
+  };
+
+  // Modern green color scheme
+  static const Color primaryGreen = Color(0xFF4CAF50);
+  static const Color lightGreen = Color(0xFFAED581);
+  static const Color darkGreen = Color(0xFF388E3C);
+  static const Color accentGreen = Color(0xFF69F0AE);
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(_handleTabChange);
-    _listenToRequests('pending', _pendingSubject);
-    _listenToRequests('approved', _approvedSubject);
-    _listenToRequests('declined', _declinedSubject);
-    _listenToRequests('completed', _completedSubject);
+    _subjects.keys.forEach((status) => _listenToRequests(status));
   }
 
   void _handleTabChange() {
     if (_tabController.indexIsChanging) {
-      switch (_tabController.index) {
-        case 0:
-          _listenToRequests('pending', _pendingSubject);
-          break;
-        case 1:
-          _listenToRequests('approved', _approvedSubject);
-          break;
-        case 2:
-          _listenToRequests('declined', _declinedSubject);
-          break;
-        case 3:
-          _listenToRequests('completed', _completedSubject);
-          break;
-      }
+      _listenToRequests(_subjects.keys.elementAt(_tabController.index));
     }
   }
 
-  void _listenToRequests(String status, BehaviorSubject<List<Map<String, dynamic>>> subject) {
+  void _listenToRequests(String status) {
+    final subject = _subjects[status]!;
     subject.add([]); // Clear the subject before adding new data
 
     void addData(List<Map<String, dynamic>> newData) {
       if (subject.hasValue) {
         final currentData = subject.value;
         final updatedData = [...currentData, ...newData]
-          ..sort((a, b) {
-            final aTimestamp = a['created_at'] as Timestamp?;
-            final bTimestamp = b['created_at'] as Timestamp?;
-            // Handle null values by treating them as older than non-null values
-            if (aTimestamp == null) return 1; // a is older
-            if (bTimestamp == null) return -1; // b is older
-            return bTimestamp.compareTo(aTimestamp); // Sort descending
-          });
+          ..sort((a, b) => (b['created_at'] as Timestamp?)?.compareTo(a['created_at'] as Timestamp? ?? Timestamp(0, 0)) ?? 0);
         subject.add(updatedData);
       } else {
         subject.add(newData);
       }
     }
 
-    FirebaseFirestore.instance
-        .collectionGroup('GARBAGE_REQUESTS')
-        .where('user_id', isEqualTo: widget.userId)
-        .where('status', isEqualTo: status)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => {'type': 'Garbage Collection', ...doc.data()})
-        .toList())
-        .listen(addData);
+    final collections = ['GARBAGE_REQUESTS', 'BURIAL_REQUESTS', 'TRANSPORTATION_REQUESTS'];
+    for (var collection in collections) {
+      FirebaseFirestore.instance
+          .collection(collection)
+          .where('user_id', isEqualTo: widget.userId)
+          .where('status', isEqualTo: status)
+          .snapshots()
+          .map((snapshot) => snapshot.docs
+          .map((doc) => {
+        'type': _getRequestType(collection),
+        ...doc.data(),
+        'id': doc.id,
+      })
+          .toList())
+          .listen(addData);
+    }
+  }
 
-    FirebaseFirestore.instance
-        .collectionGroup('BURIAL_REQUESTS')
-        .where('user_id', isEqualTo: widget.userId)
-        .where('status', isEqualTo: status)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => {'type': 'Burial Service', ...doc.data()})
-        .toList())
-        .listen(addData);
-
-    FirebaseFirestore.instance
-        .collectionGroup('TRANSPORTATION_REQUESTS')
-        .where('user_id', isEqualTo: widget.userId)
-        .where('status', isEqualTo: status)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => {'type': 'Lipat Bahay Service', ...doc.data()})
-        .toList())
-        .listen(addData);
+  String _getRequestType(String collection) {
+    switch (collection) {
+      case 'GARBAGE_REQUESTS':
+        return 'Garbage Collection';
+      case 'BURIAL_REQUESTS':
+        return 'Burial Service';
+      case 'TRANSPORTATION_REQUESTS':
+        return 'Lipat Bahay Service';
+      default:
+        return 'Unknown';
+    }
   }
 
   Future<void> _refreshData() async {
-    final currentStatus = ['pending', 'approved', 'declined', 'completed'][_tabController.index];
-    final currentSubject = [_pendingSubject, _approvedSubject, _declinedSubject, _completedSubject][_tabController.index];
-    _listenToRequests(currentStatus, currentSubject);
+    _listenToRequests(_subjects.keys.elementAt(_tabController.index));
   }
 
   @override
   void dispose() {
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
-    _pendingSubject.close();
-    _approvedSubject.close();
-    _declinedSubject.close();
-    _completedSubject.close();
+    _subjects.values.forEach((subject) => subject.close());
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('My Requests', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.green.shade600,
-        elevation: 4,
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            _buildTab('Pending', _pendingSubject, Colors.yellow),
-            _buildTab('Approved', _approvedSubject, Colors.blue),
-            _buildTab('Declined', _declinedSubject, Colors.red),
-            _buildTab('Complete', _completedSubject, Colors.green),
-          ],
+    return Theme(
+      data: ThemeData(
+        primaryColor: primaryGreen,
+        colorScheme: ColorScheme.light(primary: primaryGreen, secondary: accentGreen),
+        appBarTheme: AppBarTheme(
+          backgroundColor: primaryGreen,
+          elevation: 0,
+        ),
+        tabBarTheme: TabBarTheme(
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white.withOpacity(0.7),
+          indicator: UnderlineTabIndicator(
+            borderSide: BorderSide(color: Colors.white, width: 2),
+          ),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildRequestStream(_pendingSubject),
-          _buildRequestStream(_approvedSubject),
-          _buildRequestStream(_declinedSubject),
-          _buildRequestStream(_completedSubject),
-        ],
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            'My Requests',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+          bottom: TabBar(
+            controller: _tabController,
+            isScrollable: false,
+            tabs: [
+              _buildTab('Pending', _subjects['pending']!, Colors.orange),
+              _buildTab('Approved', _subjects['approved']!, Colors.blue),
+              _buildTab('Declined', _subjects['declined']!, Colors.red),
+              _buildTab('Done', _subjects['completed']!, lightGreen),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          controller: _tabController,
+          children: _subjects.values.map((subject) => _buildRequestStream(subject)).toList(),
+        ),
       ),
     );
   }
@@ -153,23 +152,23 @@ class _NotificationPageState extends State<NotificationPage> with SingleTickerPr
       builder: (context, snapshot) {
         int count = snapshot.data?.length ?? 0;
         return Tab(
-          child: Stack(
-            alignment: Alignment.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(title),
-              Positioned(
-                right: 8,
-                top: 0,
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '$count',
-                    style: TextStyle(color: Colors.white, fontSize: 12),
-                  ),
+              Text(
+                title,
+                style: TextStyle(fontSize: 12, color: Colors.white),
+              ),
+              SizedBox(height: 2),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -184,13 +183,14 @@ class _NotificationPageState extends State<NotificationPage> with SingleTickerPr
       stream: subject,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
+          return Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(primaryGreen)));
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return Center(child: Text('No requests found'));
+          return Center(child: Text('No requests found', style: TextStyle(color: darkGreen)));
         }
         return RefreshIndicator(
           onRefresh: _refreshData,
+          color: primaryGreen,
           child: ListView.builder(
             itemCount: snapshot.data!.length,
             itemBuilder: (context, index) {
@@ -204,28 +204,10 @@ class _NotificationPageState extends State<NotificationPage> with SingleTickerPr
   }
 
   Widget _buildRequestCard(Map<String, dynamic> request) {
-    Color statusColor;
-    switch (request['status']) {
-      case 'pending':
-        statusColor = Colors.yellow;
-        break;
-      case 'approved':
-        statusColor = Colors.blue;
-        break;
-      case 'declined':
-        statusColor = Colors.red;
-        break;
-      case 'completed':
-        statusColor = Colors.green;
-        break;
-      default:
-        statusColor = Colors.grey;
-    }
-
-    final createdAt = request['created_at'];
-    // Format date and time together
-    final formattedDateTime = (createdAt is Timestamp)
-        ? DateFormat('MM/dd/yyyy hh:mm a').format(createdAt.toDate()) // MM/dd/yyyy hh:mm AM/PM format
+    Color statusColor = _getStatusColor(request['status']);
+    final createdAt = request['created_at'] as Timestamp?;
+    final formattedDateTime = createdAt != null
+        ? DateFormat('MM/dd/yyyy hh:mm a').format(createdAt.toDate())
         : 'N/A';
 
     return Card(
@@ -233,148 +215,82 @@ class _NotificationPageState extends State<NotificationPage> with SingleTickerPr
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 2,
       child: ListTile(
-        title: Text(request['type'], style: TextStyle(fontWeight: FontWeight.bold)),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        title: Text(
+          request['type'],
+          style: TextStyle(fontWeight: FontWeight.bold, color: darkGreen),
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Status: ${request['status']}'),
-            Text('Date & Time: $formattedDateTime'), // Display the formatted date and time here
+            SizedBox(height: 4),
+            Text(
+              'Status: ${request['status']}',
+              style: TextStyle(color: statusColor, fontWeight: FontWeight.w500),
+            ),
+            SizedBox(height: 2),
+            Text(
+              'Date & Time: $formattedDateTime',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
           ],
         ),
-        trailing: Container(
-          width: 16,
-          height: 16,
-          decoration: BoxDecoration(
-            color: statusColor,
-            shape: BoxShape.circle,
-          ),
-        ),
+        trailing: Icon(Icons.arrow_forward_ios, color: primaryGreen),
         onTap: () => _showRequestDetails(request),
       ),
     );
   }
 
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'pending':
+        return Colors.orange;
+      case 'approved':
+        return Colors.blue;
+      case 'declined':
+        return Colors.red;
+      case 'completed':
+        return lightGreen;
+      default:
+        return Colors.grey;
+    }
+  }
 
   void _showRequestDetails(Map<String, dynamic> request) {
-    final createdAt = request['created_at'];
-    final formattedDateTime = (createdAt is Timestamp)
+    final createdAt = request['created_at'] as Timestamp?;
+    final formattedDateTime = createdAt != null
         ? DateFormat('MM/dd/yyyy hh:mm a').format(createdAt.toDate())
         : 'N/A';
-
-    final contactNumber = request['contact_number'] ?? 'No contact number available';
-    final email = request['email'] ?? 'No email available';
-    final firstName = request['first_name'] ?? 'No first name available';
-    final lastName = request['last_name'] ?? 'No last name available';
-    final userType = request['user_type'] ?? 'No user type available';
-
-    String addressInfo = '';
-    if (request['type'] == 'Burial Service' || request['type'] == 'Lipat Bahay Service') {
-      final pickupLocation = request['pickup_location']?['address'] ?? 'No pickup address available';
-      final destinationLocation = request['destination_location']?['address'] ?? 'No destination address available';
-      addressInfo = 'Pickup: $pickupLocation\nDestination: $destinationLocation';
-    } else {
-      addressInfo = request['location']?['address'] ?? 'No address available';
-    }
 
     showDialog(
       context: context,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 5,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SingleChildScrollView(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.assignment, color: Colors.green.shade800, size: 28),
-                    const SizedBox(width: 8),
-                    Text(
-                      request['type'],
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green.shade800,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Divider(),
-                const SizedBox(height: 8),
-                Card(
-                  color: Colors.green.shade50,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      'Request Date: $formattedDateTime',
-                      style: TextStyle(fontSize: 16, color: Colors.green.shade800),
-                    ),
+                _buildDetailHeader(request),
+                Divider(height: 24, color: lightGreen),
+                _buildDetailItem('Request Date', formattedDateTime),
+                _buildDetailItem('Status', request['status'], color: _getStatusColor(request['status'])),
+                _buildDetailItem('User Type', request['user_type'] ?? 'N/A'),
+                _buildDetailItem('Name', '${request['first_name']} ${request['last_name']}'),
+                _buildDetailItem('Email', request['email'] ?? 'N/A'),
+                _buildDetailItem('Contact', request['contact_number'] ?? 'N/A'),
+                _buildAddressInformation(request),
+                _buildNoteSection(request),
+                SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text('Close', style: TextStyle(color: primaryGreen)),
                   ),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Status: ${request['status']}',
-                  style: TextStyle(fontSize: 18, color: Colors.green.shade800),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Details:',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-
-                Text(
-                  'User Type: ',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade800),
-                ),
-                Container(
-                  margin: EdgeInsets.only(bottom: 8),
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    userType,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
-                  ),
-                ),
-
-                _buildField('First Name:', firstName),
-                _buildField('Last Name:', lastName),
-                _buildField('Email:', email),
-                _buildField('Contact Number:', contactNumber),
-                _buildField('Address Information:', addressInfo),
-
-                if (request['type'] == 'Garbage Collection')
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 8),
-                      Text(
-                        'Note:',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade800),
-                      ),
-                      Container(
-                        margin: EdgeInsets.only(bottom: 8),
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          request['note'] ?? 'No note available',
-                          style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic, color: Colors.orange.shade800),
-                        ),
-                      ),
-                    ],
-                  ),
               ],
             ),
           ),
@@ -383,28 +299,93 @@ class _NotificationPageState extends State<NotificationPage> with SingleTickerPr
     );
   }
 
-  Widget _buildField(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildDetailHeader(Map<String, dynamic> request) {
+    return Row(
       children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade800),
-        ),
-        Container(
-          margin: EdgeInsets.only(bottom: 8),
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(8),
-          ),
+        Icon(_getRequestTypeIcon(request['type']), color: primaryGreen, size: 28),
+        SizedBox(width: 8),
+        Expanded(
           child: Text(
-            value,
-            style: TextStyle(fontSize: 16),
+            request['type'],
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primaryGreen),
           ),
         ),
       ],
     );
   }
+
+  IconData _getRequestTypeIcon(String type) {
+    switch (type) {
+      case 'Garbage Collection':
+        return Icons.delete;
+      case 'Burial Service':
+        return Icons.church;
+      case 'Lipat Bahay Service':
+        return Icons.home;
+      default:
+        return Icons.assignment;
+    }
+  }
+
+  Widget _buildDetailItem(String label, String value, {Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text('$label:', style: TextStyle(fontWeight: FontWeight.bold, color: darkGreen)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(color: color ?? Colors.black87),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddressInformation(Map<String, dynamic> request) {
+    if (request['type'] == 'Burial Service' || request['type'] == 'Lipat Bahay Service') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildDetailItem('Pickup', request['pickup_location']?['address'] ?? 'N/A'),
+          _buildDetailItem('Destination', request['destination_location']?['address'] ?? 'N/A'),
+        ],
+      );
+    } else {
+      return _buildDetailItem('Address', request['location']?['address'] ?? 'N/A');
+    }
+  }
+
+  Widget _buildNoteSection(Map<String, dynamic> request) {
+    final note = request['note'];
+    if (note == null || note.isEmpty) {
+      return SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: 8),
+        Text('Note:', style: TextStyle(fontWeight: FontWeight.bold, color: darkGreen)),
+        SizedBox(height: 4),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: lightGreen.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: lightGreen),
+          ),
+          child: Text(note, style: TextStyle(color: darkGreen)),
+        ),
+      ],
+    );
+  }
 }
+
 

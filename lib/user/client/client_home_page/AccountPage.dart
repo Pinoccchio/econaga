@@ -32,6 +32,12 @@ class _AccountPageState extends State<AccountPage> {
   String? selectedMunicipality;
   String? selectedBarangay;
 
+  // Modern green color palette
+  static const Color primaryGreen = Color(0xFF4CAF50);
+  static const Color lightGreen = Color(0xFFAED581);
+  static const Color darkGreen = Color(0xFF388E3C);
+  static const Color accentGreen = Color(0xFF69F0AE);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -44,7 +50,7 @@ class _AccountPageState extends State<AccountPage> {
             flexibleSpace: FlexibleSpaceBar(
               title: Text(
                 'PROFILE',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.montserrat(
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
@@ -61,7 +67,7 @@ class _AccountPageState extends State<AccountPage> {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.green.withOpacity(0.7)],
+                        colors: [Colors.transparent, primaryGreen.withOpacity(0.7)],
                       ),
                     ),
                   ),
@@ -83,7 +89,7 @@ class _AccountPageState extends State<AccountPage> {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
+                  return Center(child: CircularProgressIndicator(color: primaryGreen));
                 }
                 if (!snapshot.hasData || !snapshot.data!.exists) {
                   return Center(child: Text('User not found'));
@@ -122,12 +128,13 @@ class _AccountPageState extends State<AccountPage> {
                 backgroundImage: userData['selfieImageUrl'] != null
                     ? NetworkImage(userData['selfieImageUrl'])
                     : AssetImage('lib/components/assets/images/default_profile_pic.jpg') as ImageProvider,
+                backgroundColor: lightGreen,
               ),
             ),
             IconButton(
               icon: CircleAvatar(
-                backgroundColor: Colors.green.withOpacity(0.1),
-                child: Icon(Icons.camera_alt, color: Colors.green),
+                backgroundColor: accentGreen.withOpacity(0.8),
+                child: Icon(Icons.camera_alt, color: Colors.white),
               ),
               onPressed: () => _updateProfilePicture(context),
             ),
@@ -136,17 +143,17 @@ class _AccountPageState extends State<AccountPage> {
         SizedBox(height: 16),
         Text(
           '${userData['first_name']} ${userData['middle_name']} ${userData['last_name']}',
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.montserrat(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            color: darkGreen,
           ),
         ),
         Text(
           userData['role'] ?? 'User',
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.montserrat(
             fontSize: 16,
-            color: Colors.green,
+            color: primaryGreen,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -183,30 +190,30 @@ class _AccountPageState extends State<AccountPage> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Colors.green.withOpacity(0.1),
-          child: Icon(icon, color: Colors.green),
+          backgroundColor: lightGreen.withOpacity(0.3),
+          child: Icon(icon, color: darkGreen),
         ),
         title: Text(
           label,
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.montserrat(
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: darkGreen,
           ),
         ),
         subtitle: Text(
           value,
-          style: GoogleFonts.poppins(
-            color: Colors.black54,
+          style: GoogleFonts.montserrat(
+            color: Colors.black87,
           ),
         ),
       ),
-    );
+    ).animate().fadeIn(duration: 300.ms).slideX(begin: 0.2, end: 0);
   }
 
   void _showProfileDialog(BuildContext context, String profileImageUrl) {
     showDialog(
       context: context,
-      barrierColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.5),
       builder: (BuildContext context) {
         return Dialog(
           backgroundColor: Colors.transparent,
@@ -222,11 +229,15 @@ class _AccountPageState extends State<AccountPage> {
                   ),
                 ),
               ),
-              CircleAvatar(
-                radius: 100,
-                backgroundImage: profileImageUrl.isNotEmpty
-                    ? NetworkImage(profileImageUrl)
-                    : AssetImage('lib/components/assets/images/default_profile_pic.jpg') as ImageProvider,
+              Hero(
+                tag: 'profileImage',
+                child: CircleAvatar(
+                  radius: 100,
+                  backgroundImage: profileImageUrl.isNotEmpty
+                      ? NetworkImage(profileImageUrl)
+                      : AssetImage('lib/components/assets/images/default_profile_pic.jpg') as ImageProvider,
+                  backgroundColor: lightGreen,
+                ),
               ),
             ],
           ),
@@ -252,7 +263,7 @@ class _AccountPageState extends State<AccountPage> {
 
         Fluttertoast.showToast(
           msg: "Profile picture updated successfully.",
-          backgroundColor: Colors.green,
+          backgroundColor: primaryGreen,
           textColor: Colors.white,
         );
       } catch (e) {
@@ -274,15 +285,19 @@ class _AccountPageState extends State<AccountPage> {
       builder: (BuildContext context) {
         return Container(
           padding: EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 'Settings',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.montserrat(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: darkGreen,
                 ),
               ),
               SizedBox(height: 16),
@@ -301,7 +316,7 @@ class _AccountPageState extends State<AccountPage> {
                     toastLength: Toast.LENGTH_SHORT,
                     gravity: ToastGravity.BOTTOM,
                     timeInSecForIosWeb: 1,
-                    backgroundColor: Colors.green,
+                    backgroundColor: primaryGreen,
                     textColor: Colors.white,
                     fontSize: 16.0,
                   );
@@ -309,16 +324,16 @@ class _AccountPageState extends State<AccountPage> {
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (context) => LoginAsScreen()),
-                        (Route<dynamic> route) => false, // Clear all previous routes
+                        (Route<dynamic> route) => false,
                   );
                 },
                 child: Text(
                   'SIGN OUT',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
                 ),
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.white,
-                  backgroundColor: Colors.green,
+                  backgroundColor: primaryGreen,
                   minimumSize: Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -335,19 +350,19 @@ class _AccountPageState extends State<AccountPage> {
   Widget _buildSettingsOption(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
       leading: CircleAvatar(
-        backgroundColor: Colors.green.withOpacity(0.1),
-        child: Icon(icon, color: Colors.green),
+        backgroundColor: lightGreen.withOpacity(0.3),
+        child: Icon(icon, color: darkGreen),
       ),
       title: Text(
         title,
-        style: GoogleFonts.poppins(
+        style: GoogleFonts.montserrat(
           fontWeight: FontWeight.w500,
-          color: Colors.black87,
+          color: darkGreen,
         ),
       ),
-      trailing: Icon(Icons.arrow_forward_ios, size: 16),
+      trailing: Icon(Icons.arrow_forward_ios, size: 16, color: primaryGreen),
       onTap: onTap,
-    );
+    ).animate().fadeIn(duration: 300.ms).slideX(begin: 0.2, end: 0);
   }
 
   void _showChangePasswordModal(BuildContext context) {
@@ -373,10 +388,10 @@ class _AccountPageState extends State<AccountPage> {
               children: <Widget>[
                 Text(
                   'Change Password',
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.montserrat(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    color: darkGreen,
                   ),
                 ),
                 SizedBox(height: 20),
@@ -388,7 +403,7 @@ class _AccountPageState extends State<AccountPage> {
                 SizedBox(height: 30),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+                    backgroundColor: primaryGreen,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -418,7 +433,7 @@ class _AccountPageState extends State<AccountPage> {
 
                         Fluttertoast.showToast(
                           msg: "Password changed successfully!",
-                          backgroundColor: Colors.green,
+                          backgroundColor: primaryGreen,
                           textColor: Colors.white,
                         );
 
@@ -434,7 +449,7 @@ class _AccountPageState extends State<AccountPage> {
                   },
                   child: Text(
                     'Change Password',
-                    style: GoogleFonts.poppins(color: Colors.white),
+                    style: GoogleFonts.montserrat(color: Colors.white),
                   ),
                 ),
               ],
@@ -451,9 +466,14 @@ class _AccountPageState extends State<AccountPage> {
       obscureText: obscureText,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: GoogleFonts.poppins(color: Colors.black87),
+        labelStyle: GoogleFonts.montserrat(color: darkGreen),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: primaryGreen),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: primaryGreen, width: 2),
         ),
       ),
     );
@@ -505,10 +525,10 @@ class _AccountPageState extends State<AccountPage> {
                     children: <Widget>[
                       Text(
                         'Change Account Information',
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.montserrat(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: darkGreen,
                         ),
                       ),
                       SizedBox(height: 20),
@@ -585,7 +605,7 @@ class _AccountPageState extends State<AccountPage> {
                       SizedBox(height: 30),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
+                          backgroundColor: primaryGreen,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -607,7 +627,7 @@ class _AccountPageState extends State<AccountPage> {
                               toastLength: Toast.LENGTH_SHORT,
                               gravity: ToastGravity.BOTTOM,
                               timeInSecForIosWeb: 1,
-                              backgroundColor: Colors.green,
+                              backgroundColor: primaryGreen,
                               textColor: Colors.white,
                               fontSize: 16.0,
                             );
@@ -626,7 +646,7 @@ class _AccountPageState extends State<AccountPage> {
                         },
                         child: Text(
                           'Save Information',
-                          style: GoogleFonts.poppins(color: Colors.white),
+                          style: GoogleFonts.montserrat(color: Colors.white),
                         ),
                       ),
                     ],
@@ -651,12 +671,17 @@ class _AccountPageState extends State<AccountPage> {
       controller: controller,
       enabled: isEditable,
       decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: Colors.black87),
+        prefixIcon: Icon(icon, color: darkGreen),
         labelText: label,
         hintText: hint,
-        labelStyle: GoogleFonts.poppins(color: Colors.black87),
+        labelStyle: GoogleFonts.montserrat(color: darkGreen),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: primaryGreen),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: primaryGreen, width: 2),
         ),
         filled: true,
         fillColor: isEditable ? Colors.white : Colors.grey[200],
@@ -769,12 +794,19 @@ class _AccountPageState extends State<AccountPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: Colors.black87)),
+        Text(label, style: GoogleFonts.montserrat(fontWeight: FontWeight.w600, color: darkGreen)),
         SizedBox(height: 8),
         DropdownButtonFormField<String>(
           decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: onChanged != null ? Colors.green : Colors.grey),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            prefixIcon: Icon(icon, color: onChanged != null ? darkGreen : Colors.grey),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: primaryGreen),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: primaryGreen, width: 2),
+            ),
             filled: true,
             fillColor: onChanged != null ? Colors.white : Colors.grey[200],
           ),
@@ -806,8 +838,8 @@ class _AccountPageState extends State<AccountPage> {
           backgroundColor: Colors.green.shade50,
           title: Text(
             'Address on Map',
-            style: TextStyle(
-              color: Colors.green.shade800,
+            style: GoogleFonts.montserrat(
+              color: darkGreen,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -820,7 +852,7 @@ class _AccountPageState extends State<AccountPage> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(
                     child: CircularProgressIndicator(
-                      color: Colors.green.shade700,
+                      color: primaryGreen,
                     ),
                   );
                 }
@@ -828,7 +860,7 @@ class _AccountPageState extends State<AccountPage> {
                   return Center(
                     child: Text(
                       'Error: ${snapshot.error}',
-                      style: TextStyle(color: Colors.green.shade800),
+                      style: GoogleFonts.montserrat(color: darkGreen),
                     ),
                   );
                 }
@@ -836,7 +868,7 @@ class _AccountPageState extends State<AccountPage> {
                   return Center(
                     child: Text(
                       'Location not found',
-                      style: TextStyle(color: Colors.green.shade800),
+                      style: GoogleFonts.montserrat(color: darkGreen),
                     ),
                   );
                 }
@@ -864,9 +896,9 @@ class _AccountPageState extends State<AccountPage> {
           actions: <Widget>[
             TextButton(
               style: TextButton.styleFrom(
-                foregroundColor: Colors.green.shade800,
+                foregroundColor: darkGreen,
               ),
-              child: Text('Close'),
+              child: Text('Close', style: GoogleFonts.montserrat()),
               onPressed: () {
                 Navigator.of(context).pop();
               },
@@ -908,7 +940,7 @@ class _AccountPageState extends State<AccountPage> {
 
       Fluttertoast.showToast(
         msg: "Information updated successfully!",
-        backgroundColor: Colors.green,
+        backgroundColor: primaryGreen,
         textColor: Colors.white,
       );
     } catch (e) {
@@ -920,3 +952,4 @@ class _AccountPageState extends State<AccountPage> {
     }
   }
 }
+

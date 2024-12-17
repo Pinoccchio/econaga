@@ -27,12 +27,12 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
 
   String? _serviceType;
   LatLng _center = LatLng(13.6217, 123.1948);
-  LatLng? _pickupLocation;
-  LatLng? _destinationLocation;
-  Set<Marker> _markers = {};
-  String _pickupAddress = 'Tap on the map to select Pickup location';
-  String _destinationAddress = 'Tap on the map to select Destination location';
-  bool _isLocationUpdating = false;
+  Set<Marker> _pickupMarkers = {};
+  Set<Marker> _destinationMarkers = {};
+  String _pickupAddress = 'Tap on the map or search to select pickup location';
+  String _destinationAddress = 'Tap on the map or search to select destination location';
+  final _pickupSearchController = TextEditingController();
+  final _destinationSearchController = TextEditingController();
 
   MapType _selectedMapType = MapType.normal;
 
@@ -40,14 +40,24 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
   late TextEditingController _lastNameController;
   late TextEditingController _emailController;
   late TextEditingController _contactNumberController;
-  final _pickupSearchController = TextEditingController();
-  final _destinationSearchController = TextEditingController();
 
   String _firstName = '';
   String _lastName = '';
   String _email = '';
   String _contactNumber = '';
+  String _note = '';
+
   bool _isExternalClient = false;
+
+  String? selectedRegion;
+  String? selectedProvince;
+  String? selectedMunicipality;
+  String? selectedBarangay;
+
+  final LatLngBounds _nagaCityBounds = LatLngBounds(
+    southwest: LatLng(13.5500, 123.1500),
+    northeast: LatLng(13.6934, 123.2397),
+  );
 
   @override
   void initState() {
@@ -57,18 +67,18 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
     _emailController = TextEditingController();
     _contactNumberController = TextEditingController();
     _fetchUserData();
-    _addMarker(_center, 'pickup');
-    _addMarker(_center, 'destination');
+    _addMarker(_center, true);
+    _addMarker(_center, false);
   }
 
   @override
   void dispose() {
+    _pickupSearchController.dispose();
+    _destinationSearchController.dispose();
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
     _contactNumberController.dispose();
-    _pickupSearchController.dispose();
-    _destinationSearchController.dispose();
     super.dispose();
   }
 
@@ -105,123 +115,251 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
     }
   }
 
-  void _addMarker(LatLng position, String locationType) {
-    setState(() {
-      _isLocationUpdating = true;
-      if (locationType == 'pickup') {
-        _pickupLocation = position;
-        _pickupAddress = 'Updating...';
-      } else {
-        _destinationLocation = position;
-        _destinationAddress = 'Updating...';
-      }
-
-      _updateAddress(position, locationType);
-
-      _markers = {
-        if (_pickupLocation != null)
-          Marker(
-            markerId: MarkerId('pickup'),
-            position: _pickupLocation!,
-            infoWindow: InfoWindow(title: 'Pickup Location'),
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          ),
-        if (_destinationLocation != null)
-          Marker(
-            markerId: MarkerId('destination'),
-            position: _destinationLocation!,
-            infoWindow: InfoWindow(title: 'Destination Location'),
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          ),
-      };
-
-      _pickupMapController?.animateCamera(CameraUpdate.newLatLng(position));
-      _destinationMapController?.animateCamera(CameraUpdate.newLatLng(position));
-    });
+  void _addMarker(LatLng position, bool isPickup) {
+    if (_nagaCityBounds.contains(position)) {
+      setState(() {
+        if (isPickup) {
+          _pickupMarkers.clear();
+          _pickupMarkers.add(
+            Marker(
+              markerId: MarkerId('pickup'),
+              position: position,
+              infoWindow: InfoWindow(title: 'Pickup Location'),
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+            ),
+          );
+        } else {
+          _destinationMarkers.clear();
+          _destinationMarkers.add(
+            Marker(
+              markerId: MarkerId('destination'),
+              position: position,
+              infoWindow: InfoWindow(title: 'Destination Location'),
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            ),
+          );
+        }
+      });
+      _updateAddress(position, isPickup);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please select a location within Naga City.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
-  void _updateAddress(LatLng position, String locationType) async {
+  Future<void> _updateAddress(LatLng position, bool isPickup) async {
     try {
       List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
         setState(() {
-          if (locationType == 'pickup') {
-            _pickupAddress = '${place.street}, ${place.locality}, ${place.country}';
+          if (isPickup) {
+            _pickupAddress = '${place.street}, ${place.subLocality}, ${place.locality}, ${place.administrativeArea}';
           } else {
-            _destinationAddress = '${place.street}, ${place.locality}, ${place.country}';
+            _destinationAddress = '${place.street}, ${place.subLocality}, ${place.locality}, ${place.administrativeArea}';
           }
-          _isLocationUpdating = false;
         });
       }
     } catch (e) {
       print('Error: $e');
       setState(() {
-        _isLocationUpdating = false;
+        if (isPickup) {
+          _pickupAddress = 'Unable to fetch address';
+        } else {
+          _destinationAddress = 'Unable to fetch address';
+        }
       });
     }
   }
 
-  Future<void> _getCurrentLocation(String locationType) async {
+  Future<void> _getCurrentLocation(bool isPickup) async {
     try {
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       LatLng currentLatLng = LatLng(position.latitude, position.longitude);
-      _addMarker(currentLatLng, locationType);
+      if (_nagaCityBounds.contains(currentLatLng)) {
+        _addMarker(currentLatLng, isPickup);
+        if (isPickup) {
+          _pickupMapController?.animateCamera(CameraUpdate.newLatLng(currentLatLng));
+        } else {
+          _destinationMapController?.animateCamera(CameraUpdate.newLatLng(currentLatLng));
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Your current location is outside Naga City. Please select a location within Naga City.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
       print('Error getting current location: $e');
     }
   }
 
-  void _resetMarkers(String locationType) {
-    setState(() {
-      if (locationType == 'pickup') {
-        _pickupLocation = null;
-        _pickupAddress = 'Tap on the map to select Pickup location';
+  void _selectPlace(Prediction prediction, bool isPickup) {
+    if (prediction.lat != null && prediction.lng != null) {
+      final lat = double.parse(prediction.lat!);
+      final lng = double.parse(prediction.lng!);
+      final newPosition = LatLng(lat, lng);
+      if (_nagaCityBounds.contains(newPosition)) {
+        _addMarker(newPosition, isPickup);
+        if (isPickup) {
+          _pickupMapController?.animateCamera(CameraUpdate.newLatLng(newPosition));
+          _pickupSearchController.text = prediction.description!;
+        } else {
+          _destinationMapController?.animateCamera(CameraUpdate.newLatLng(newPosition));
+          _destinationSearchController.text = prediction.description!;
+        }
       } else {
-        _destinationLocation = null;
-        _destinationAddress = 'Tap on the map to select Destination location';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Selected location is outside Naga City. Please choose a location within Naga City.'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
-      _markers = {};
-    });
+    }
+  }
+
+  Widget _buildMapSection(String title, String address, bool isPickup) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textColor,
+          ),
+        ),
+        SizedBox(height: 8),
+        Container(
+          height: 300,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.accentColor),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Stack(
+              children: [
+                GoogleMap(
+                  initialCameraPosition: CameraPosition(target: _center, zoom: 14),
+                  markers: isPickup ? _pickupMarkers : _destinationMarkers,
+                  mapType: MapType.normal,
+                  onMapCreated: (GoogleMapController controller) {
+                    if (isPickup) {
+                      _pickupMapController = controller;
+                    } else {
+                      _destinationMapController = controller;
+                    }
+                    controller.animateCamera(CameraUpdate.newLatLngBounds(_nagaCityBounds, 50.0));
+                  },
+                  onTap: (position) => _addMarker(position, isPickup),
+                  zoomGesturesEnabled: true,
+                  zoomControlsEnabled: false,
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: false,
+                  mapToolbarEnabled: false,
+                  polygons: {
+                    Polygon(
+                      polygonId: PolygonId('nagaCityBoundary'),
+                      points: [
+                        LatLng(13.5500, 123.1500),
+                        LatLng(13.6934, 123.1500),
+                        LatLng(13.6934, 123.2397),
+                        LatLng(13.5500, 123.2397),
+                      ],
+                      strokeWidth: 3,
+                      strokeColor: Colors.blue,
+                      fillColor: Colors.blue.withOpacity(0.1),
+                    ),
+                  },
+                  gestureRecognizers: Set()
+                    ..add(Factory<EagerGestureRecognizer>(() => EagerGestureRecognizer())),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Column(
+                    children: [
+                      _buildMapIconButton(
+                        icon: Icons.my_location,
+                        onTap: () => _getCurrentLocation(isPickup),
+                      ),
+                      SizedBox(height: 8),
+                      _buildMapIconButton(
+                        icon: Icons.refresh,
+                        onTap: () {
+                          setState(() {
+                            if (isPickup) {
+                              _pickupMarkers.clear();
+                              _pickupAddress = 'Tap on the map or search to select pickup location';
+                            } else {
+                              _destinationMarkers.clear();
+                              _destinationAddress = 'Tap on the map or search to select destination location';
+                            }
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(height: 8),
+        Text(
+          address,
+          style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textColor.withOpacity(0.7)),
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.origColor,
+      backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.primaryColor,
         elevation: 0,
         title: Text(
           'Transportation Request',
           style: GoogleFonts.poppins(
-            color: Colors.black,
+            color: Colors.white,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildPersonalInfoSection(),
-              SizedBox(height: 24),
-              _buildMapTypeSelector(),
-              SizedBox(height: 24),
-              _buildMapSection('Pickup', _pickupAddress, 'pickup'),
-              SizedBox(height: 24),
-              _buildMapSection('Destination', _destinationAddress, 'destination'),
-              SizedBox(height: 24),
-              _buildSubmitButton(_serviceType ?? 'Default Value')
-            ],
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildPersonalInfoSection(),
+                SizedBox(height: 24),
+                _buildLocationSection(),
+                SizedBox(height: 24),
+                _buildNoteSection(),
+                SizedBox(height: 24),
+                _buildSubmitButton(),
+              ],
+            ),
           ),
         ),
       ),
@@ -232,6 +370,7 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: AppColors.cardColor,
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
@@ -242,13 +381,13 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: AppColors.textColor,
               ),
             ),
             SizedBox(height: 16),
             Row(
               children: [
-                Text('External Client', style: GoogleFonts.poppins()),
+                Text('External Client', style: GoogleFonts.poppins(color: AppColors.textColor)),
                 Switch(
                   value: _isExternalClient,
                   onChanged: (value) {
@@ -256,6 +395,7 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
                       _isExternalClient = value;
                     });
                   },
+                  activeColor: AppColors.primaryColor,
                 ),
               ],
             ),
@@ -279,7 +419,15 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
     return DropdownButtonFormField<String>(
       decoration: InputDecoration(
         labelText: 'Service Type',
-        border: OutlineInputBorder(),
+        labelStyle: TextStyle(color: AppColors.textColor.withOpacity(0.7)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: AppColors.accentColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: AppColors.primaryColor, width: 2),
+        ),
       ),
       items: [
         DropdownMenuItem(value: 'burial', child: Text('Burial Service')),
@@ -296,122 +444,108 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
         }
         return null;
       },
+      style: TextStyle(color: AppColors.textColor),
+      icon: Icon(Icons.arrow_drop_down, color: AppColors.primaryColor),
     );
   }
 
-  Widget _buildMapTypeSelector() {
-    return Row(
-      children: [
-        Text(
-          'Map View: ',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-        ),
-        DropdownButton<MapType>(
-          value: _selectedMapType,
-          items: [
-            DropdownMenuItem(value: MapType.normal, child: Text('Normal')),
-            DropdownMenuItem(value: MapType.satellite, child: Text('Satellite')),
-            DropdownMenuItem(value: MapType.terrain, child: Text('Terrain')),
-            DropdownMenuItem(value: MapType.hybrid, child: Text('Hybrid')),
-          ],
-          onChanged: (MapType? type) {
-            setState(() {
-              _selectedMapType = type ?? MapType.hybrid;
-            });
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMapSection(String title, String address, String locationType) {
+  Widget _buildLocationSection() {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: AppColors.cardColor,
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '$title Location',
+              'Pickup and Destination Locations',
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: AppColors.textColor,
               ),
             ),
-            SizedBox(height: 8),
+            SizedBox(height: 16),
             GooglePlaceAutoCompleteTextField(
-              textEditingController: locationType == 'pickup' ? _pickupSearchController : _destinationSearchController,
+              textEditingController: _pickupSearchController,
               googleAPIKey: "AIzaSyD4UAtE_r8JjBbd0o5qfv3ZSPX_8xkNJ7c",
               inputDecoration: InputDecoration(
-                hintText: "Search for a $title location",
+                hintText: "Search for pickup location",
                 border: OutlineInputBorder(),
               ),
               debounceTime: 800,
               countries: ["ph"],
               isLatLngRequired: true,
               getPlaceDetailWithLatLng: (Prediction prediction) {
-                _updateLocation(prediction, locationType);
+                _selectPlace(prediction, true);
               },
               itemClick: (Prediction prediction) {
-                _updateLocation(prediction, locationType);
+                _selectPlace(prediction, true);
               },
             ),
-            SizedBox(height: 8),
-            Text(
-              address,
-              style: GoogleFonts.poppins(fontSize: 14, color: Colors.black54),
+            SizedBox(height: 16),
+            _buildMapSection('Pickup Location', _pickupAddress, true),
+            SizedBox(height: 24),
+            GooglePlaceAutoCompleteTextField(
+              textEditingController: _destinationSearchController,
+              googleAPIKey: "AIzaSyD4UAtE_r8JjBbd0o5qfv3ZSPX_8xkNJ7c",
+              inputDecoration: InputDecoration(
+                hintText: "Search for destination location",
+                border: OutlineInputBorder(),
+              ),
+              debounceTime: 800,
+              countries: ["ph"],
+              isLatLngRequired: true,
+              getPlaceDetailWithLatLng: (Prediction prediction) {
+                _selectPlace(prediction, false);
+              },
+              itemClick: (Prediction prediction) {
+                _selectPlace(prediction, false);
+              },
             ),
             SizedBox(height: 16),
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    height: 200,
-                    child: GestureDetector(
-                      onTap: () {
-                        FocusScope.of(context).unfocus();
-                      },
-                      child: GoogleMap(
-                        initialCameraPosition: CameraPosition(target: _center, zoom: 14),
-                        markers: _markers,
-                        mapType: _selectedMapType,
-                        onMapCreated: (GoogleMapController controller) {
-                          if (locationType == 'pickup') {
-                            _pickupMapController = controller;
-                          } else {
-                            _destinationMapController = controller;
-                          }
-                        },
-                        onTap: (position) => _onMapTap(position, locationType),
-                        gestureRecognizers: Set()
-                          ..add(Factory<OneSequenceGestureRecognizer>(
-                                  () => EagerGestureRecognizer())),
-                      ),
-                    ),
-                  ),
+            _buildMapSection('Destination Location', _destinationAddress, false),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoteSection() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: AppColors.cardColor,
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Note to Driver',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textColor,
+              ),
+            ),
+            SizedBox(height: 16),
+            TextFormField(
+              decoration: InputDecoration(
+                hintText: 'Enter your instructions here',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: AppColors.accentColor),
                 ),
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: Column(
-                    children: [
-                      _buildMapIconButton(
-                        icon: Icons.my_location,
-                        onTap: () => _getCurrentLocation(locationType),
-                      ),
-                      SizedBox(height: 8),
-                      _buildMapIconButton(
-                        icon: Icons.refresh,
-                        onTap: () => _resetMarkers(locationType),
-                      ),
-                    ],
-                  ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: AppColors.primaryColor, width: 2),
                 ),
-              ],
+              ),
+              maxLines: 3,
+              onChanged: (value) => _note = value,
             ),
           ],
         ),
@@ -419,132 +553,109 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
     );
   }
 
-  void _updateLocation(Prediction prediction, String locationType) {
-    if (prediction.lat != null && prediction.lng != null) {
-      final lat = double.parse(prediction.lat!);
-      final lng = double.parse(prediction.lng!);
-      final newPosition = LatLng(lat, lng);
-      _addMarker(newPosition, locationType);
-    }
-  }
-
-  void _onMapTap(LatLng position, String locationType) {
-    _addMarker(position, locationType);
-  }
-
-  Widget _buildSubmitButton(String serviceType) {
+  Widget _buildSubmitButton() {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _isLocationUpdating
-            ? null
-            : () {
-          if (_formKey.currentState!.validate()) {
-            _submitServiceRequest(serviceType);
-          }
-        },
+        onPressed: _submitTransportationRequest,
         child: Text(
-          _isLocationUpdating ? 'Updating location...' : 'Submit Request',
+          'Submit Request',
           style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         style: ElevatedButton.styleFrom(
           foregroundColor: Colors.white,
-          backgroundColor: _isLocationUpdating ? Colors.grey : Colors.green,
+          backgroundColor: AppColors.primaryColor,
           padding: EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 4,
         ),
       ),
     );
   }
 
-  void _submitServiceRequest(String serviceType) async {
-    if (_firstNameController.text.isEmpty ||
-        _lastNameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
-        _contactNumberController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please fill in all required fields.',
-            style: TextStyle(color: Colors.white),
+  void _submitTransportationRequest() async {
+    if (_formKey.currentState!.validate()) {
+      if (_pickupMarkers.isEmpty || _destinationMarkers.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Please select both pickup and destination locations on the map.',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
           ),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
+        );
+        return;
+      }
 
-    if (_pickupLocation == null || _destinationLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please select both pickup and destination locations on the map.',
-            style: TextStyle(color: Colors.white),
+      if (_serviceType == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Please select a service type.',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
           ),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
+        );
+        return;
+      }
 
-    String collection = serviceType == 'burial'
-        ? 'BURIAL_REQUESTS'
-        : 'TRANSPORTATION_REQUESTS';
+      try {
+        Map<String, dynamic> requestData = {
+          'user_id': widget.userId,
+          'first_name': _firstNameController.text,
+          'last_name': _lastNameController.text,
+          'email': _emailController.text,
+          'contact_number': _contactNumberController.text,
+          'pickup_location': {
+            'latitude': _pickupMarkers.first.position.latitude,
+            'longitude': _pickupMarkers.first.position.longitude,
+            'address': _pickupAddress,
+          },
+          'destination_location': {
+            'latitude': _destinationMarkers.first.position.latitude,
+            'longitude': _destinationMarkers.first.position.longitude,
+            'address': _destinationAddress,
+          },
+          'note': _note.isNotEmpty ? _note : null,
+          'status': 'pending',
+          'created_at': FieldValue.serverTimestamp(),
+          'user_type': _isExternalClient ? 'external' : 'official',
+          'service_type': _serviceType,
+        };
 
-    try {
-      Map<String, dynamic> requestData = {
-        'user_id': widget.userId,
-        'first_name': _firstNameController.text,
-        'last_name': _lastNameController.text,
-        'email': _emailController.text,
-        'contact_number': _contactNumberController.text,
-        'pickup_location': {
-          'latitude': _pickupLocation!.latitude,
-          'longitude': _pickupLocation!.longitude,
-          'address': _pickupAddress,
-        },
-        'destination_location': {
-          'latitude': _destinationLocation!.latitude,
-          'longitude': _destinationLocation!.longitude,
-          'address': _destinationAddress,
-        },
-        'service_type': serviceType,
-        'status': 'pending',
-        'created_at': FieldValue.serverTimestamp(),
-        'user_type': _isExternalClient ? 'external' : 'official',
-      };
+        String collectionName = _serviceType == 'burial' ? 'BURIAL_REQUESTS' : 'TRANSPORTATION_REQUESTS';
+        await FirebaseFirestore.instance.collection(collectionName).add(requestData);
 
-      await FirebaseFirestore.instance.collection(collection).add(requestData);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Request submitted successfully!',
-            style: TextStyle(color: Colors.white),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Request submitted successfully!',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
           ),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
-        ),
-      );
+        );
 
-      showDialog(
-        context: context,
-        builder: (context) => ApprovalDialog(),
-      );
+        showDialog(
+          context: context,
+          builder: (context) => ApprovalDialog(),
+        );
 
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to submit request: $e',
-            style: TextStyle(color: Colors.white),
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit request. Please try again.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
           ),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
+        );
+        print('Error submitting request: $e');
+      }
     }
   }
 
@@ -553,8 +664,17 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
-        border: OutlineInputBorder(),
+        labelStyle: TextStyle(color: AppColors.textColor.withOpacity(0.7)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: AppColors.accentColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: AppColors.primaryColor, width: 2),
+        ),
       ),
+      style: TextStyle(color: AppColors.textColor),
       validator: (value) {
         if (value == null || value.isEmpty) {
           return errorText;
@@ -568,11 +688,30 @@ class _ClientTransportationScreenState extends State<ClientTransportationScreen>
   Widget _buildMapIconButton({required IconData icon, required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
-      child: CircleAvatar(
-        backgroundColor: Colors.white,
-        child: Icon(icon, color: Colors.black87),
+      child: Container(
+        padding: EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 4,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: AppColors.primaryColor, size: 24),
       ),
     );
   }
+}
+
+class AppColors {
+  static const Color primaryColor = Color(0xFF4CAF50);
+  static const Color accentColor = Color(0xFF81C784);
+  static const Color backgroundColor = Color(0xFFF1F8E9);
+  static const Color textColor = Color(0xFF333333);
+  static const Color cardColor = Colors.white;
 }
 

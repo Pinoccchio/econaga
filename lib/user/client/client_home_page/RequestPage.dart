@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../client_garbage_collection_screen/client_garbage_collection_screen.dart';
 import '../client_tranportation_screen/client_transportation_screen.dart';
 
@@ -8,138 +9,158 @@ class RequestPage extends StatelessWidget {
 
   RequestPage({required this.userId});
 
+  // Modern green color palette
+  static const Color primaryGreen = Color(0xFF4CAF50);
+  static const Color lightGreen = Color(0xFFAED581);
+  static const Color darkGreen = Color(0xFF388E3C);
+  static const Color accentGreen = Color(0xFF69F0AE);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Background for the lower section
-      appBar: AppBar(
-        backgroundColor: Color(0xFFAEF989), // Set AppBar color
-        elevation: 0,
-        title: Text(
-          'CHOOSE SERVICES',
-          style: GoogleFonts.lato(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
+      backgroundColor: Colors.white,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 200.0,
+            floating: false,
+            pinned: true,
+            backgroundColor: primaryGreen,
+            flexibleSpace: FlexibleSpaceBar(
+              title: Text(
+                'Choose Services',
+                style: GoogleFonts.montserrat(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              background: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [lightGreen, primaryGreen],
+                  ),
+                ),
+                child: Center(
+                  child: Hero(
+                    tag: 'logo',
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: Image.asset(
+                          'lib/components/assets/images/official_logo.png',
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
-        centerTitle: true, // Center the title
-      ),
-      body: Column(
-        children: [
-          // Top green gradient background
-          Container(
-            width: double.infinity,
-            height: 250,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFFAEF989), // Light green
-                  Color(0xFF68D88B), // Darker green
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Available Services',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: darkGreen,
+                    ),
+                  ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.2, end: 0),
+                  SizedBox(height: 20),
+                  _buildServiceButton(
+                    context: context,
+                    title: 'Transportation Services',
+                    icon: Icons.directions_bus,
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ClientTransportationScreen(userId: userId),
+                        ),
+                      );
+                    },
+                  ).animate().fadeIn(duration: 500.ms, delay: 100.ms).slideY(begin: 0.2, end: 0),
+                  SizedBox(height: 16),
+                  _buildServiceButton(
+                    context: context,
+                    title: 'Garbage Collection',
+                    icon: Icons.delete_outline,
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ClientGarbageCollectionScreen(userId: userId),
+                        ),
+                      );
+                    },
+                  ).animate().fadeIn(duration: 500.ms, delay: 200.ms).slideY(begin: 0.2, end: 0),
                 ],
               ),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(100),
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // The logo image with a circular white background
-                Container(
-                  width: 150, // Adjust size as needed
-                  height: 150, // Adjust size as needed
-                  decoration: BoxDecoration(
-                    color: Colors.white, // White background
-                    shape: BoxShape.circle, // Circular shape
-                  ),
-                  alignment: Alignment.center,
-                  child: ClipOval(
-                    child: Image.asset(
-                      'lib/components/assets/images/official_logo.png', // Replace with the actual logo path
-                      height: 150,
-                      width: 150,
-                      fit: BoxFit.cover, // Ensure the image fits well
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: 50),
-          // Buttons for services
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40.0),
-            child: Column(
-              children: [
-                // Transportation Services button
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ClientTransportationScreen(userId: userId), // Pass userId here
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    side: BorderSide(color: Colors.black12), // Optional border
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    elevation: 4, // Add shadow effect
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Transportation Services',
-                      style: GoogleFonts.lato(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 20),
-                // Garbage Collection button
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ClientGarbageCollectionScreen(userId: userId), // Pass userId here
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    side: BorderSide(color: Colors.black12), // Optional border
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    elevation: 4, // Add shadow effect
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Garbage Collection',
-                      style: GoogleFonts.lato(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildServiceButton({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      width: double.infinity,
+      height: 100,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: darkGreen,
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 36, color: primaryGreen),
+            SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: GoogleFonts.montserrat(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: darkGreen,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, color: primaryGreen),
+          ],
+        ),
+      ),
+    );
+  }
 }
+
