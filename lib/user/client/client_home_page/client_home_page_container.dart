@@ -278,8 +278,8 @@ class _ClientHomeScreenContainerState
             ),
           ],
           backgroundColor: Colors.white,
-          selectedItemColor: Colors.black,
-          unselectedItemColor: Colors.black54,
+          selectedItemColor: Color(0xFF4CAF50), // Modern green for selected items
+          unselectedItemColor: Color(0xFF81C784), // Lighter green for unselected items
           showUnselectedLabels: true,
           type: BottomNavigationBarType.fixed,
           elevation: 8.0,

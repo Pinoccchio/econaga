@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'approve_service_screen/garbage_service_request.dart';
 import 'completed_collections_viewer.dart';
@@ -13,22 +14,30 @@ class CollectorHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(),
-                SizedBox(height: 16),
-                _buildMainBanner(),
-                SizedBox(height: 16),
-                _buildStatisticsRow(context),
-                SizedBox(height: 16),
-                _buildManageCollectionSection(context),
-              ],
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF4CAF50), Color(0xFF1B5E20)],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(),
+                  SizedBox(height: 24),
+                  _buildMainBanner(),
+                  SizedBox(height: 24),
+                  _buildStatisticsRow(context),
+                  SizedBox(height: 24),
+                  _buildManageCollectionSection(context),
+                ],
+              ),
             ),
           ),
         ),
@@ -44,10 +53,12 @@ class CollectorHomePage extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Text('Error: ${snapshot.error}');
+          return Text('Error: ${snapshot.error}', style: TextStyle(color: Colors.white));
         }
         if (!snapshot.hasData || snapshot.connectionState == ConnectionState.waiting) {
-          return CircularProgressIndicator();
+          return CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          );
         }
 
         var userData = snapshot.data!.data() as Map<String, dynamic>;
@@ -58,29 +69,45 @@ class CollectorHomePage extends StatelessWidget {
           children: [
             GestureDetector(
               onTap: () => _showProfileDialog(context, selfieImageUrl),
-              child: CircleAvatar(
-                radius: 30,
-                backgroundImage: selfieImageUrl.isNotEmpty
-                    ? NetworkImage(selfieImageUrl)
-                    : AssetImage('lib/components/assets/images/default_profile_pic.jpg') as ImageProvider,
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 10,
+                      offset: Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: CircleAvatar(
+                  radius: 28,
+                  backgroundImage: selfieImageUrl.isNotEmpty
+                      ? NetworkImage(selfieImageUrl)
+                      : AssetImage('lib/components/assets/images/default_profile_pic.jpg') as ImageProvider,
+                ),
               ),
             ),
-            SizedBox(width: 12),
+            SizedBox(width: 16),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   name,
                   style: GoogleFonts.poppins(
-                    fontSize: 16,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                 ),
                 Text(
                   'Collector',
                   style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: Colors.grey[600],
+                    fontSize: 16,
+                    color: Colors.white.withOpacity(0.8),
                   ),
                 ),
               ],
@@ -100,8 +127,8 @@ class CollectorHomePage extends StatelessWidget {
           backgroundColor: Colors.transparent,
           elevation: 0,
           child: Container(
-            width: 200,
-            height: 200,
+            width: 250,
+            height: 250,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               image: DecorationImage(
@@ -110,6 +137,14 @@ class CollectorHomePage extends StatelessWidget {
                     ? NetworkImage(profileImageUrl)
                     : AssetImage('lib/components/assets/images/default_profile_pic.jpg') as ImageProvider,
               ),
+              border: Border.all(color: Colors.white, width: 4),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: Offset(0, 10),
+                ),
+              ],
             ),
           ),
         );
@@ -119,17 +154,11 @@ class CollectorHomePage extends StatelessWidget {
 
   Widget _buildMainBanner() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 5,
-            offset: Offset(0, 2),
-          ),
-        ],
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
       ),
       child: Row(
         children: [
@@ -138,10 +167,19 @@ class CollectorHomePage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Get Trash Pickup for a Cleaner Environment',
+                  'Clean Environment,\nHappy Community',
                   style: GoogleFonts.poppins(
-                    fontSize: 18,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Your role in keeping our city clean',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    color: Colors.white.withOpacity(0.8),
                   ),
                 ),
               ],
@@ -150,8 +188,8 @@ class CollectorHomePage extends StatelessWidget {
           SizedBox(width: 16),
           Image.asset(
             'lib/components/assets/images/truck-green-collector.png',
-            height: 60,
-            width: 60,
+            height: 100,
+            width: 100,
           ),
         ],
       ),
@@ -162,148 +200,134 @@ class CollectorHomePage extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('GARBAGE_REQUESTS')
-                .where('status', isEqualTo: 'approved')
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return _buildStatCardWithBackground(
-                  '...',
-                  'Approved Garbage\nCollection Request',
-                  'lib/components/assets/images/trashcan-collector.png',
-                );
-              }
-              if (snapshot.hasError) {
-                return _buildStatCardWithBackground(
-                  'Error',
-                  'Approved Garbage\nCollection Request',
-                  'lib/components/assets/images/trashcan-collector.png',
-                );
-              }
-              int approvedCount = snapshot.data?.docs.length ?? 0;
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => GarbageServiceRequest()),
-                  );
-                },
-                child: _buildStatCardWithBackground(
-                  approvedCount.toString(),
-                  'Approved Garbage\nCollection Request',
-                  'lib/components/assets/images/trashcan-collector.png',
-                ),
-              );
-            },
+          child: _buildStatCard(
+            context,
+            'GARBAGE_REQUESTS',
+            'approved',
+            'Approved\nRequests',
+            'lib/components/assets/images/trashcan-collector.png',
+            GarbageServiceRequest(),
           ),
         ),
         SizedBox(width: 16),
         Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('GARBAGE_REQUESTS')
-                .where('status', isEqualTo: 'completed')
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return _buildStatCardWithBackground(
-                  '...',
-                  'Completed\nCollections',
-                  'lib/components/assets/images/trashcan-collector2.png',
-                );
-              }
-              if (snapshot.hasError) {
-                return _buildStatCardWithBackground(
-                  'Error',
-                  'Completed\nCollections',
-                  'lib/components/assets/images/trashcan-collector2.png',
-                );
-              }
-              int completedCount = snapshot.data?.docs.length ?? 0;
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => CompletedCollectionsViewer()),
-                  );
-                },
-                child: _buildStatCardWithBackground(
-                  completedCount.toString(),
-                  'Completed\nCollections',
-                  'lib/components/assets/images/trashcan-collector2.png',
-                ),
-              );
-            },
+          child: _buildStatCard(
+            context,
+            'GARBAGE_REQUESTS',
+            'completed',
+            'Completed\nCollections',
+            'lib/components/assets/images/trashcan-collector2.png',
+            CompletedCollectionsViewer(),
           ),
         ),
       ],
     );
   }
 
+  Widget _buildStatCard(BuildContext context, String collection, String status,
+      String label, String imagePath, Widget destinationPage) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection(collection)
+          .where('status', isEqualTo: status)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildStatCardContent('...', label, imagePath);
+        }
+        if (snapshot.hasError) {
+          return _buildStatCardContent('Error', label, imagePath);
+        }
+        int count = snapshot.data?.docs.length ?? 0;
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => destinationPage),
+            );
+          },
+          child: _buildStatCardContent(count.toString(), label, imagePath),
+        );
+      },
+    );
+  }
 
-  Widget _buildStatCardWithBackground(String number, String label, String backgroundImagePath) {
+  Widget _buildStatCardContent(String number, String label, String imagePath) {
     return Container(
-      height: 100,
+      height: 150,
       decoration: BoxDecoration(
-        image: DecorationImage(
-          image: AssetImage(backgroundImagePath),
-          fit: BoxFit.cover,
-        ),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
       ),
-      child: Container(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              number,
-              style: GoogleFonts.poppins(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Image.asset(
+                imagePath,
+                fit: BoxFit.cover,
+                color: Colors.white.withOpacity(0.1),
+                colorBlendMode: BlendMode.srcATop,
               ),
             ),
-            SizedBox(height: 4),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: Colors.white,
-              ),
+          ),
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  number,
+                  style: GoogleFonts.poppins(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    color: Colors.white.withOpacity(0.8),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildManageCollectionSection(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.green[100],
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Manage Your Trash Collection',
+            'Manage Collections',
             style: GoogleFonts.poppins(
-              fontSize: 16,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
           ),
           SizedBox(height: 8),
           Text(
-            'Easily access real-time updates and streamline your route.',
+            'Access real-time updates and optimize your route',
             style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: Colors.black87,
+              fontSize: 16,
+              color: Colors.white.withOpacity(0.8),
             ),
           ),
           SizedBox(height: 16),
@@ -314,16 +338,16 @@ class CollectorHomePage extends StatelessWidget {
                 MaterialPageRoute(builder: (context) => GarbageServiceRequest()),
               );
             },
-            icon: Icon(Icons.visibility),
+            icon: Icon(Icons.visibility, color: Color(0xFF2E7D32)),
             label: Text(
               'View Approved Requests',
-              style: GoogleFonts.poppins(),
+              style: GoogleFonts.poppins(color: Color(0xFF2E7D32), fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
-              foregroundColor: Colors.black,
               backgroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(30),
               ),
             ),
           ),
@@ -332,3 +356,4 @@ class CollectorHomePage extends StatelessWidget {
     );
   }
 }
+
