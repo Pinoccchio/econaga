@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../status_card_clickable/lipat_bahay_filtered_request_screen.dart';
 
 class AdminLipatBahayServiceRequest extends StatefulWidget {
   const AdminLipatBahayServiceRequest({Key? key}) : super(key: key);
@@ -146,42 +147,52 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
   }
 
   Widget _buildStatusCard(String status, int count, Color color) {
-    return Container(
-      width: 80,
-      height: 80,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 2,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => LipatBahayFilteredRequestScreen(status: status.toLowerCase(), requests: allRequests),
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            status,
-            style: TextStyle(
-              color: color,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+        );
+      },
+      child: Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 2,
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            count.toString(),
-            style: TextStyle(
-              color: Colors.black87,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              status,
+              style: TextStyle(
+                color: color,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              count.toString(),
+              style: TextStyle(
+                color: Colors.black87,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -492,61 +503,26 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
     );
   }
 
-  void updateRequestStatus(String docId, String status) {
+  void updateRequestStatus(String docId, String newStatus) {
     FirebaseFirestore.instance
         .collection('TRANSPORTATION_REQUESTS')
         .doc(docId)
-        .get()
-        .then((doc) {
-      if (doc.exists) {
-        String currentStatus = doc.data()!['status'];
-        if (currentStatus == 'approved') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Status cannot be changed once approved.'),
-              backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          );
-          return;
-        } else {
-          // Update status if not approved
-          FirebaseFirestore.instance
-              .collection('TRANSPORTATION_REQUESTS')
-              .doc(docId)
-              .update({'status': status}).then((_) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Request ${status.toUpperCase()}'),
-                backgroundColor: status == 'approved' ? Colors.green : Colors.red,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            );
-            _fetchRequests(); // This will update both the list and the counts
-          }).catchError((error) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to update status: $error'),
-                backgroundColor: Colors.red,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            );
-          });
-        }
-      }
+        .update({'status': newStatus}).then((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Request ${newStatus.toUpperCase()}'),
+          backgroundColor: newStatus == 'approved' ? Colors.green : Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      _fetchRequests(); // This will update both the list and the counts
     }).catchError((error) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to fetch request status: $error'),
+          content: Text('Failed to update status: $error'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(

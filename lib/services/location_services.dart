@@ -34,7 +34,7 @@ class LocationService extends ChangeNotifier {
 
       Geolocator.getPositionStream(
         desiredAccuracy: LocationAccuracy.high,
-        distanceFilter: 10,
+        distanceFilter: 0,
       ).listen((Position position) {
         _updateLocation(position);
       });

@@ -197,13 +197,14 @@ class _SecondPageState extends State<_SecondPage> {
     Map<DateTime, List<ServiceRequest>> newEvents = {};
 
     DateTime now = DateTime.now();
-    DateTime endDate = now.add(Duration(days: 3)).subtract(Duration(seconds: 1));
+    DateTime startDate = now.add(Duration(days: 3));
+    DateTime endDate = now.add(Duration(days: 365)); // Fetch events for up to a year
 
     // Load Garbage Requests
     QuerySnapshot garbageSnapshot = await FirebaseFirestore.instance
         .collection('GARBAGE_REQUESTS')
         .where('status', isEqualTo: 'approved')
-        .where('requested_date_time', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
+        .where('requested_date_time', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
         .where('requested_date_time', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
         .get();
 
@@ -215,7 +216,7 @@ class _SecondPageState extends State<_SecondPage> {
     QuerySnapshot transportationSnapshot = await FirebaseFirestore.instance
         .collection('TRANSPORTATION_REQUESTS')
         .where('status', isEqualTo: 'approved')
-        .where('requested_date_time', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
+        .where('requested_date_time', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
         .where('requested_date_time', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
         .get();
 
@@ -227,7 +228,7 @@ class _SecondPageState extends State<_SecondPage> {
     QuerySnapshot burialSnapshot = await FirebaseFirestore.instance
         .collection('BURIAL_REQUESTS')
         .where('status', isEqualTo: 'approved')
-        .where('requested_date_time', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
+        .where('requested_date_time', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
         .where('requested_date_time', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
         .get();
 
@@ -310,6 +311,11 @@ class _SecondPageState extends State<_SecondPage> {
   }
 
   List<ServiceRequest> _getEventsForDay(DateTime day) {
+    DateTime now = DateTime.now();
+    DateTime thresholdDate = now.add(Duration(days: 3));
+    if (day.isBefore(thresholdDate)) {
+      return [];
+    }
     return _events[DateTime(day.year, day.month, day.day)] ?? [];
   }
 
@@ -349,8 +355,8 @@ class _SecondPageState extends State<_SecondPage> {
               child: Column(
                 children: [
                   TableCalendar(
-                    firstDay: DateTime.utc(2023, 1, 1),
-                    lastDay: DateTime.utc(2024, 12, 31),
+                    firstDay: DateTime.now().subtract(Duration(days: 365)),
+                    lastDay: DateTime.now().add(Duration(days: 365)),
                     focusedDay: _focusedDay,
                     calendarFormat: _calendarFormat,
                     eventLoader: _getEventsForDay,
@@ -367,6 +373,9 @@ class _SecondPageState extends State<_SecondPage> {
                       setState(() {
                         _calendarFormat = format;
                       });
+                    },
+                    onPageChanged: (focusedDay) {
+                      _focusedDay = focusedDay;
                     },
                     calendarStyle: CalendarStyle(
                       todayDecoration: BoxDecoration(
@@ -390,6 +399,9 @@ class _SecondPageState extends State<_SecondPage> {
                       formatButtonTextStyle: TextStyle(color: Colors.white),
                       titleCentered: true,
                     ),
+                    enabledDayPredicate: (day) {
+                      return day.isAfter(DateTime.now().add(Duration(days: 2)));
+                    },
                   ),
                   Expanded(
                     child: _selectedDay == null
@@ -617,5 +629,4 @@ class ServiceRequest {
     required this.userType,
   });
 }
-
 

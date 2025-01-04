@@ -1,18 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:flutter_map_marker_popup/flutter_map_marker_popup.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class DrivingMonitoringPage extends StatefulWidget {
+  const DrivingMonitoringPage({Key? key}) : super(key: key);
+
   @override
   _DrivingMonitoringPageState createState() => _DrivingMonitoringPageState();
 }
 
 class _DrivingMonitoringPageState extends State<DrivingMonitoringPage> {
-  List<Map<String, dynamic>> filteredCollectors = [];
+  List<DocumentSnapshot<Map<String, dynamic>>> filteredCollectors = [];
   TextEditingController _searchController = TextEditingController();
+  MapController mapController = MapController();
+  final PopupController _popupLayerController = PopupController();
+  String? _selectedTruckId;
+  bool _isMapReady = false;
 
   @override
   void initState() {
     super.initState();
+    _fetchCollectors();
   }
 
   @override
@@ -21,11 +32,28 @@ class _DrivingMonitoringPageState extends State<DrivingMonitoringPage> {
     super.dispose();
   }
 
+  void _fetchCollectors() async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('USERS_ACCOUNTS')
+        .where('role', isEqualTo: 'collector')
+        .get();
+
+    setState(() {
+      filteredCollectors = snapshot.docs;
+    });
+  }
+
   void _filterCollectors(String query) {
     setState(() {
-      // Optional: If you want to filter locally
-      filteredCollectors = filteredCollectors.where((collector) {
-        return collector['name'].toLowerCase().contains(query.toLowerCase());
+      filteredCollectors = filteredCollectors.where((doc) {
+        final data = doc.data();
+        if (data == null) return false;
+        final firstName = data['first_name'] as String? ?? '';
+        final lastName = data['last_name'] as String? ?? '';
+        final fullName = '$firstName $lastName'.toLowerCase();
+        final truckNumber = data['truck_number']?.toString() ?? '';
+        return fullName.contains(query.toLowerCase()) ||
+            truckNumber.contains(query);
       }).toList();
     });
   }
@@ -33,173 +61,259 @@ class _DrivingMonitoringPageState extends State<DrivingMonitoringPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: TextField(
-          controller: _searchController,
-          onChanged: _filterCollectors,
-          decoration: InputDecoration(
-            hintText: 'Search',
-            prefixIcon: Icon(Icons.search, color: Colors.grey),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none,
-            ),
-            fillColor: Colors.grey.shade200,
-            filled: true,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('USERS_ACCOUNTS')
-            .where('role', isEqualTo: 'collector')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return Center(child: CircularProgressIndicator());
-          }
-
-          filteredCollectors = snapshot.data!.docs.map((doc) {
-            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-            return {
-              'id': doc.id,
-              'name': '${data['last_name']}, ${data['first_name']}',
-              'availability': data['availability'] ?? 'Not Available',
-              'image': data['selfieImageUrl'],
-            };
-          }).toList();
-
-          // Apply search filter
-          if (_searchController.text.isNotEmpty) {
-            filteredCollectors = filteredCollectors.where((collector) {
-              return collector['name']
-                  .toLowerCase()
-                  .contains(_searchController.text.toLowerCase());
-            }).toList();
-          }
-
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Text('Driver',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Align(
-                        alignment: Alignment.center,
-                        child: Text('Availability',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 10),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: filteredCollectors.length,
-                    separatorBuilder: (context, index) => SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final collector = filteredCollectors[index];
-                      return CollectorCard(
-                        name: collector['name'],
-                        availability: collector['availability'],
-                        image: collector['image'],
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class CollectorCard extends StatelessWidget {
-  final String name;
-  final String availability;
-  final String image;
-
-  CollectorCard({
-    required this.name,
-    required this.availability,
-    required this.image,
-  });
-
-  Color get availabilityColor {
-    switch (availability) {
-      case 'Available':
-        return Colors.green;
-      case 'Used':
-        return Colors.red;
-      case 'Not Available':
-        return Colors.black;
-      default:
-        return Colors.black;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 5)],
-      ),
-      padding: EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-      child: Row(
+      body: Column(
         children: [
+          _buildSearchBar(),
           Expanded(
-            flex: 2,
             child: Row(
               children: [
-                CircleAvatar(
-                  backgroundImage:
-                      image.isNotEmpty ? NetworkImage(image) : null,
-                  child: image.isEmpty ? Icon(Icons.person) : null,
-                  radius: 20,
-                ),
-                SizedBox(width: 10),
                 Expanded(
-                  child:
-                      Text(name, style: TextStyle(fontWeight: FontWeight.bold)),
+                  flex: 2,
+                  child: _buildCollectorList(),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: _buildMap(),
                 ),
               ],
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Align(
-              alignment: Alignment.center,
-              child: Container(
-                padding: EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-                decoration: BoxDecoration(
-                  color: availabilityColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  availability.toUpperCase(),
-                  style: TextStyle(
-                      color: availabilityColor, fontWeight: FontWeight.bold),
-                ),
-              ),
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildSearchBar() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      color: Colors.green[50],
+      child: TextField(
+        controller: _searchController,
+        onChanged: _filterCollectors,
+        decoration: InputDecoration(
+          hintText: 'Search by name or truck number',
+          prefixIcon: Icon(Icons.search, color: Colors.green),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.green),
+          ),
+          filled: true,
+          fillColor: Colors.white,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCollectorList() {
+    return ListView.builder(
+      itemCount: filteredCollectors.length,
+      itemBuilder: (context, index) {
+        final data = filteredCollectors[index].data()!;
+        return CollectorCard(
+          collector: data,
+          onTap: () {
+            setState(() {
+              _selectedTruckId = filteredCollectors[index].id;
+            });
+            _focusOnCollector(data);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMap() {
+    return FlutterMap(
+      mapController: mapController,
+      options: MapOptions(
+        initialCenter: filteredCollectors.isNotEmpty && _selectedTruckId != null
+            ? _parseRealtimeLocation(filteredCollectors.firstWhere((doc) => doc.id == _selectedTruckId).data()!['realtime_location'])
+            : LatLng(13.6216, 123.1948), // Coordinates for Naga, Philippines
+        initialZoom: 14.0,
+        onMapReady: () {
+          setState(() {
+            _isMapReady = true;
+          });
+        },
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+          userAgentPackageName: 'com.example.app',
+        ),
+        MarkerLayer(
+          markers: filteredCollectors.map((doc) {
+            final data = doc.data()!;
+            LatLng position = _parseRealtimeLocation(data['realtime_location']);
+            return Marker(
+              point: position,
+              width: 40.0,
+              height: 40.0,
+              child: Icon(
+                Icons.local_shipping,
+                color: data['truck_availability'] == 'Available' ? Colors.green : Colors.red,
+                size: 40.0,
+              ),
+            );
+          }).toList(),
+        ),
+        PopupMarkerLayerWidget(
+          options: PopupMarkerLayerOptions(
+            popupController: _popupLayerController,
+            markers: _selectedTruckId != null
+                ? filteredCollectors
+                .where((doc) => doc.id == _selectedTruckId)
+                .map((doc) {
+              final data = doc.data()!;
+              LatLng position = _parseRealtimeLocation(data['realtime_location']);
+              return Marker(
+                point: position,
+                width: 40.0,
+                height: 40.0,
+                child: Icon(
+                  Icons.local_shipping,
+                  color: Colors.blue,
+                  size: 40.0,
+                ),
+              );
+            }).toList()
+                : [],
+            popupDisplayOptions: PopupDisplayOptions(
+              builder: (BuildContext context, Marker marker) {
+                final collectorDoc = filteredCollectors.firstWhere(
+                      (doc) => _parseRealtimeLocation(doc.data()!['realtime_location']) == marker.point,
+                  orElse: () => filteredCollectors.first,
+                );
+                final collector = collectorDoc.data()!;
+                return Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${collector['first_name']} ${collector['last_name']}'),
+                        Text('Truck #: ${collector['truck_number']}'),
+                        Text('Status: ${collector['status']}'),
+                        Text('Availability: ${collector['truck_availability']}'),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  LatLng _parseRealtimeLocation(Map<String, dynamic>? location) {
+    if (location != null && location['latitude'] != null && location['longitude'] != null) {
+      return LatLng(location['latitude'] as double, location['longitude'] as double);
+    }
+    return LatLng(0, 0); // Default location if parsing fails
+  }
+
+  void _focusOnCollector(Map<String, dynamic> collectorData) {
+    final location = collectorData['realtime_location'] as Map<String, dynamic>?;
+    if (location != null && location['latitude'] != null && location['longitude'] != null) {
+      mapController.move(LatLng(location['latitude'], location['longitude']), 15);
+    }
+  }
 }
+
+class CollectorCard extends StatelessWidget {
+  final Map<String, dynamic> collector;
+  final VoidCallback onTap;
+
+  const CollectorCard({Key? key, required this.collector, required this.onTap}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundImage: CachedNetworkImageProvider(collector['selfieImageUrl'] ?? ''),
+                    child: collector['selfieImageUrl'] == null ? Icon(Icons.person) : null,
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${collector['first_name']} ${collector['last_name']}',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        Text('Truck #: ${collector['truck_number']}'),
+                        _buildAvailabilityBadge(collector['truck_availability']),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+              _buildInfoRow(Icons.phone, collector['phone_number']),
+              _buildInfoRow(Icons.email, collector['email']),
+              _buildInfoRow(Icons.location_on, collector['realtime_location']?['descriptive_location'] ?? 'N/A'),
+              _buildInfoRow(Icons.work, 'Zone: ${collector['collection_zone']?['descriptive_location'] ?? 'N/A'}'),
+              _buildInfoRow(Icons.info_outline, 'Status: ${collector['status']}'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvailabilityBadge(String? availability) {
+    Color color;
+    switch (availability?.toLowerCase()) {
+      case 'used':
+        color = Colors.red;
+        break;
+      case 'available':
+        color = Colors.green;
+        break;
+      default:
+        color = Colors.grey;
+    }
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color),
+      ),
+      child: Text(
+        availability?.toUpperCase() ?? 'N/A',
+        style: TextStyle(color: color, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.green),
+          SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(fontSize: 14))),
+        ],
+      ),
+    );
+  }
+}
+
