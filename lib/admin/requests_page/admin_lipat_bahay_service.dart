@@ -12,6 +12,7 @@ class AdminLipatBahayServiceRequest extends StatefulWidget {
 }
 
 class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRequest> {
+  bool mounted = true;
   String searchQuery = '';
   List<DocumentSnapshot> allRequests = [];
   List<DocumentSnapshot> filteredRequests = [];
@@ -34,11 +35,13 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
         .orderBy('created_at', descending: true)
         .get();
 
-    setState(() {
-      allRequests = snapshot.docs;
-      filteredRequests = allRequests;
-      _updateStatusCounts();
-    });
+    if (mounted) {
+      setState(() {
+        allRequests = snapshot.docs;
+        filteredRequests = allRequests;
+        _updateStatusCounts();
+      });
+    }
   }
 
   void _updateStatusCounts() {
@@ -271,7 +274,7 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
                   ),
                 ),
               ),
-              SizedBox(width: 160), // Space for action buttons
+              SizedBox(width: 240), // Space for action buttons
             ],
           ),
         ),
@@ -383,13 +386,19 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
             _buildActionButton(
               'APPROVE',
               Colors.green,
-                  () => updateRequestStatus(request.id, 'approved'),
+              status.toLowerCase() == 'declined' ? null : () => updateRequestStatus(request.id, 'approved'),
             ),
             SizedBox(width: 8),
             _buildActionButton(
               'DECLINE',
               Colors.red,
-                  () => updateRequestStatus(request.id, 'declined'),
+              status.toLowerCase() == 'approved' ? null : () => updateRequestStatus(request.id, 'declined'),
+            ),
+            SizedBox(width: 8),
+            _buildActionButton(
+              'DELETE',
+              Colors.blue,
+                  () => deleteRequest(request.id),
             ),
           ],
         ),
@@ -431,11 +440,11 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
     );
   }
 
-  Widget _buildActionButton(String text, Color color, VoidCallback onPressed) {
+  Widget _buildActionButton(String text, Color color, VoidCallback? onPressed) {
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: color,
+        backgroundColor: onPressed == null ? Colors.grey : color,
         foregroundColor: Colors.white,
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         shape: RoundedRectangleBorder(
@@ -533,6 +542,68 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
     });
   }
 
+  void deleteRequest(String docId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text("Confirm Deletion", style: TextStyle(color: Colors.green[800])),
+          content: Text("Are you sure you want to delete this request?"),
+          backgroundColor: Colors.green[50],
+          actions: [
+            TextButton(
+              child: Text("Cancel", style: TextStyle(color: Colors.green[800])),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+            ElevatedButton(
+              child: Text("Delete", style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[800],
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                FirebaseFirestore.instance
+                    .collection('TRANSPORTATION_REQUESTS')
+                    .doc(docId)
+                    .delete()
+                    .then((_) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Request deleted successfully'),
+                        backgroundColor: Colors.green[800],
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    );
+                    _fetchRequests(); // Update the list and counts
+                  }
+                }).catchError((error) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to delete request: $error'),
+                        backgroundColor: Colors.red,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    );
+                  }
+                });
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showDetailsDialog(BuildContext context, Map<String, dynamic> data) {
     // Extract location data safely
     final pickupLocation = data['pickup_location'] as Map<String, dynamic>? ?? {};
@@ -626,5 +697,13 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
       ),
     );
   }
+
+  @override
+  void dispose() {
+    mounted = false;
+    super.dispose();
+  }
 }
+
+
 

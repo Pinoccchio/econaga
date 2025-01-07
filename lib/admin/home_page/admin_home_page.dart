@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../accounts_page/admin_account_page.dart';
 import '../complaints_page/admin_complaints_page.dart';
 import '../requests_page/admin_burial_service.dart';
@@ -24,6 +25,58 @@ class AdminHomePage extends StatefulWidget {
 class _AdminHomePageState extends State<AdminHomePage> {
   String _currentPage = 'Dashboard';
   bool isDrawerOpen = true;
+  int newGarbageRequests = 0;
+  int newBurialRequests = 0;
+  int newTransportRequests = 0;
+  late SharedPreferences prefs;
+
+  @override
+  void initState() {
+    super.initState();
+    _initSharedPreferences();
+  }
+
+  void _initSharedPreferences() async {
+    prefs = await SharedPreferences.getInstance();
+    _listenForNewRequests();
+  }
+
+  void _listenForNewRequests() {
+    _listenToCollection('GARBAGE_REQUESTS', (count) => setState(() => newGarbageRequests = count));
+    _listenToCollection('BURIAL_REQUESTS', (count) => setState(() => newBurialRequests = count));
+    _listenToCollection('TRANSPORTATION_REQUESTS', (count) => setState(() => newTransportRequests = count));
+  }
+
+  void _listenToCollection(String collectionName, Function(int) updateCount) {
+    DateTime lastChecked = DateTime.fromMillisecondsSinceEpoch(
+        prefs.getInt('${collectionName}_last_checked') ?? 0
+    );
+
+    FirebaseFirestore.instance
+        .collection(collectionName)
+        .where('status', isEqualTo: 'pending')
+        .where('created_at', isGreaterThan: lastChecked)
+        .snapshots()
+        .listen((snapshot) {
+      updateCount(snapshot.docs.length);
+    });
+  }
+
+  Future<void> _updateLastChecked(String collectionName) async {
+    await prefs.setInt('${collectionName}_last_checked', DateTime.now().millisecondsSinceEpoch);
+    // Reset the corresponding badge count
+    switch (collectionName) {
+      case 'GARBAGE_REQUESTS':
+        setState(() => newGarbageRequests = 0);
+        break;
+      case 'BURIAL_REQUESTS':
+        setState(() => newBurialRequests = 0);
+        break;
+      case 'TRANSPORTATION_REQUESTS':
+        setState(() => newTransportRequests = 0);
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,12 +111,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
               var userData = snapshot.data!.data() as Map<String, dynamic>;
               String email = userData['email'] ?? '';
               String fullName = userData['full_name'] ?? '';
-              String firstLetter = email.isNotEmpty ? email[0].toUpperCase() : 'U'; // Default to 'U' if email is empty
+              String firstLetter = email.isNotEmpty ? email[0].toUpperCase() : 'U';
 
               return Row(
                 children: [
                   Text(
-                    fullName, // Display the full name
+                    fullName,
                     style: TextStyle(
                       color: Colors.black,
                       fontSize: 18,
@@ -74,17 +127,17 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   GestureDetector(
                     onTap: () {
                       setState(() {
-                        _currentPage = 'Account'; // Update the page to 'Account'
+                        _currentPage = 'Account';
                       });
                     },
                     child: CircleAvatar(
-                      backgroundColor: Colors.green, // Set the background color to green
+                      backgroundColor: Colors.green,
                       child: Text(
-                        firstLetter, // Display the first letter of the email
+                        firstLetter,
                         style: TextStyle(
-                          color: Colors.white, // Set the text color to white
-                          fontSize: 24, // Adjust the font size for better visibility
-                          fontWeight: FontWeight.bold, // Make the letter bold
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
@@ -119,10 +172,17 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   ExpansionTile(
                     leading: Icon(Icons.request_page, color: Colors.green),
                     title: Text('Request'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildRequestBadge(),
+                        Icon(Icons.chevron_right),
+                      ],
+                    ),
                     children: [
-                      _buildListTile('Garbage Collection', null, 'GarbageCollection'),
-                      _buildListTile('Burial Service', null, 'BurialService'),
-                      _buildListTile('Lipat Bahay', null, 'LipatBahay'),
+                      _buildListTile('Garbage Collection', null, 'GarbageCollection', badgeCount: newGarbageRequests),
+                      _buildListTile('Burial Service', null, 'BurialService', badgeCount: newBurialRequests),
+                      _buildListTile('Transportation', null, 'Transportation', badgeCount: newTransportRequests),
                     ],
                   ),
                   ExpansionTile(
@@ -141,33 +201,70 @@ class _AdminHomePageState extends State<AdminHomePage> {
               ),
             ),
           Expanded(
-            child: _currentPage == 'Dashboard'
-                ? DashboardContent()
-                : _currentPage == 'GarbageCollection'
-                ? AdminGarbageCollectionRequest()
-                : _currentPage == 'BurialService'
-                ? AdminBurialServiceRequest()
-                : _currentPage == 'LipatBahay'
-                ? AdminLipatBahayServiceRequest()
-                : _currentPage == 'Complaints'
-                ? ComplaintsOverview()
-                : _currentPage == 'DriverMonitoring'
-                ? DrivingMonitoringPage()
-                : _currentPage == 'TruckMonitoring'
-                ? TruckMonitoringPage()
-                : _currentPage == 'Account'
-                ? AdminAccountPage()
-                : Center(child: Text('Content for $_currentPage')),
+            child: _buildPageContent(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildListTile(String title, IconData? icon, String page, {Color color = Colors.green}) {
+  Widget _buildPageContent() {
+    switch (_currentPage) {
+      case 'Dashboard':
+        return DashboardContent();
+      case 'GarbageCollection':
+        _updateLastChecked('GARBAGE_REQUESTS');
+        return AdminGarbageCollectionRequest();
+      case 'BurialService':
+        _updateLastChecked('BURIAL_REQUESTS');
+        return AdminBurialServiceRequest();
+      case 'Transportation':
+        _updateLastChecked('TRANSPORTATION_REQUESTS');
+        return AdminLipatBahayServiceRequest();
+      case 'Complaints':
+        return ComplaintsOverview();
+      case 'DriverMonitoring':
+        return DrivingMonitoringPage();
+      case 'TruckMonitoring':
+        return TruckMonitoringPage();
+      case 'Account':
+        return AdminAccountPage();
+      default:
+        return Center(child: Text('Content for $_currentPage'));
+    }
+  }
+
+  Widget _buildListTile(String title, IconData? icon, String page, {Color color = Colors.green, int badgeCount = 0}) {
     return ListTile(
       leading: icon != null ? Icon(icon, color: color) : null,
-      title: Text(title),
+      title: Row(
+        children: [
+          Text(title),
+          if (badgeCount > 0)
+            Container(
+              margin: EdgeInsets.only(left: 8),
+              padding: EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              constraints: BoxConstraints(
+                minWidth: 20,
+                minHeight: 20,
+              ),
+              child: Center(
+                child: Text(
+                  badgeCount.toString(),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
       onTap: () {
         if (page == 'Logout') {
           _handleLogout(context);
@@ -178,6 +275,31 @@ class _AdminHomePageState extends State<AdminHomePage> {
       splashColor: Colors.grey.withOpacity(0.3),
       hoverColor: Colors.grey.withOpacity(0.1),
     );
+  }
+
+  Widget _buildRequestBadge() {
+    int totalNewRequests = newGarbageRequests + newBurialRequests + newTransportRequests;
+    if (totalNewRequests > 0) {
+      return Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: Colors.red,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Text(
+            totalNewRequests.toString(),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      );
+    }
+    return SizedBox(width: 24, height: 24);
   }
 
   void _handleLogout(BuildContext context) async {
@@ -194,3 +316,4 @@ class _AdminHomePageState extends State<AdminHomePage> {
     }
   }
 }
+

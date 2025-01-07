@@ -14,6 +14,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../login_as_screen/login_as_screen.dart';
 
@@ -36,6 +37,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   LatLng? _currentLocation;
   bool isTruckToggle = false;
   String? selectedAvailability;
+  String? selectedTimeSchedule;
+  String? selectedStartTime;
+  String? selectedEndTime;
+  String? selectedTruckAvailability;
 
   static const String kGoogleApiKey = "AIzaSyD4UAtE_r8JjBbd0o5qfv3ZSPX_8xkNJ7c";
 
@@ -44,6 +49,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _getCurrentLocation();
+    });
+    FirebaseFirestore.instance
+        .collection('USERS_ACCOUNTS')
+        .doc(widget.userId)
+        .get()
+        .then((doc) {
+      if (doc.exists) {
+        var userData = doc.data() as Map<String, dynamic>;
+        setState(() {
+          selectedAvailability = userData['availability'];
+          selectedTruckAvailability = userData['truck_availability'];
+          if (userData['duty_time'] != null) {
+            selectedStartTime = userData['duty_time']['start'];
+            selectedEndTime = userData['duty_time']['end'];
+          }
+        });
+      }
     });
   }
 
@@ -171,56 +193,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Select Availability Type',
+              'Driver Availability',
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w600,
                 color: Colors.black87,
                 fontSize: 18,
               ),
             ),
-            SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: DropdownButton<bool>(
-                    isExpanded: true,
-                    value: isTruckToggle,
-                    onChanged: (newValue) {
-                      setState(() {
-                        isTruckToggle = newValue!;
-                        selectedAvailability = null;
-                      });
-                    },
-                    items: [
-                      DropdownMenuItem<bool>(
-                        value: false,
-                        child: Text('Driver Availability'),
-                      ),
-                      DropdownMenuItem<bool>(
-                        value: true,
-                        child: Text('Truck Availability'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 16),
+            SizedBox(height: 8),
             DropdownButton<String>(
               isExpanded: true,
-              value: selectedAvailability ?? (isTruckToggle
-                  ? (userData['truck_availability'] ?? 'For Repair')
-                  : (userData['availability'] ?? 'Not Available')),
+              value: selectedAvailability ?? userData['availability'] ?? 'Available',
               onChanged: (newValue) {
                 if (newValue != null) {
                   setState(() {
                     selectedAvailability = newValue;
                   });
-                  _updateAvailability(newValue, isTruckToggle);
+                  _updateAvailability(newValue);
                 }
               },
-              items: <String>['Available', 'Used', isTruckToggle ? 'For Repair' : 'Not Available']
+              items: <String>['Available', 'On Duty']
+                  .map<DropdownMenuItem<String>>((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      color: value == 'Available' ? Colors.green : Colors.orange,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Truck Availability',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+                fontSize: 18,
+              ),
+            ),
+            SizedBox(height: 8),
+            DropdownButton<String>(
+              isExpanded: true,
+              value: selectedTruckAvailability ?? userData['truck_availability'] ?? 'Available',
+              onChanged: (newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    selectedTruckAvailability = newValue;
+                  });
+                  _updateTruckAvailability(newValue);
+                }
+              },
+              items: <String>['Available', 'In Use', 'Under Maintenance']
                   .map<DropdownMenuItem<String>>((String value) {
                 return DropdownMenuItem<String>(
                   value: value,
@@ -229,37 +255,164 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     style: TextStyle(
                       color: value == 'Available'
                           ? Colors.green
-                          : value == 'Used'
-                          ? Colors.red
-                          : Colors.black,
+                          : value == 'In Use'
+                          ? Colors.orange
+                          : Colors.red,
                     ),
                   ),
                 );
               }).toList(),
             ),
+            SizedBox(height: 16),
+            Text(
+              'Select Duty Time',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+                fontSize: 18,
+              ),
+            ),
+            SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _selectTime(context, true),
+                    child: InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: 'Start Time',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        prefixIcon: Icon(Icons.access_time, color: Colors.green),
+                      ),
+                      child: Text(selectedStartTime ?? 'Not set'),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _selectTime(context, false),
+                    child: InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: 'End Time',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        prefixIcon: Icon(Icons.access_time, color: Colors.green),
+                      ),
+                      child: Text(selectedEndTime ?? 'Not set'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _updateDutyTime,
+                child: Text(
+                  'Update Duty Time',
+                  style: TextStyle(color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+            SizedBox(height: 8),
           ],
         ),
       ),
     );
   }
 
-  Future<void> _updateAvailability(String availability, bool isTruck) async {
+  Future<void> _updateAvailability(String availability) async {
     try {
       await FirebaseFirestore.instance
           .collection('USERS_ACCOUNTS')
           .doc(widget.userId)
-          .update({
-        isTruck ? 'truck_availability' : 'availability': availability
-      });
+          .update({'availability': availability});
 
       Fluttertoast.showToast(
-        msg: "${isTruck ? 'Truck' : 'Driver'} availability updated successfully!",
+        msg: "Availability updated successfully!",
         backgroundColor: Colors.green,
         textColor: Colors.white,
       );
     } catch (e) {
       Fluttertoast.showToast(
         msg: "Failed to update availability: $e",
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
+  }
+
+
+  Future<void> _selectTime(BuildContext context, bool isStartTime) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      builder: (BuildContext context, Widget? child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.green.shade600,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+            dialogBackgroundColor: Colors.white,
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        setState(() {
+          if (isStartTime) {
+            selectedStartTime = picked.format(context);
+          } else {
+            selectedEndTime = picked.format(context);
+          }
+        });
+      });
+    }
+  }
+
+  Future<void> _updateDutyTime() async {
+    if (selectedStartTime == null || selectedEndTime == null) {
+      Fluttertoast.showToast(
+        msg: "Please select both start and end times",
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('USERS_ACCOUNTS')
+          .doc(widget.userId)
+          .update({
+        'duty_time': {
+          'start': selectedStartTime,
+          'end': selectedEndTime,
+        },
+      });
+
+      Fluttertoast.showToast(
+        msg: "Duty time updated successfully!",
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to update duty time: $e",
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
@@ -903,7 +1056,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       initialLocation = LatLng(position.latitude, position.longitude);
     } else {
-      initialLocation = _selectedLocation!;
+      initialLocation= _selectedLocation!;
     }
 
     setState(() {
@@ -921,7 +1074,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           markerId: MarkerId('selected_location'),
           position: _selectedLocation!,
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          infoWindow: InfoWindow(title: 'Selected Collection Zone'),
+          infoWindow: InfoWindow(title:'Selected Collection Zone'),
         ));
       }
     });
@@ -1110,10 +1263,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _updateTruckAvailability(String availability) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('USERS_ACCOUNTS')
+          .doc(widget.userId)
+          .update({'truck_availability': availability});
+
+      Fluttertoast.showToast(
+        msg: "Truck availability updated successfully!",
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to update truck availability: $e",
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
+  }
+
   @override
   void dispose() {
     _mapController?.dispose();
     super.dispose();
   }
 }
+
+
 
