@@ -100,7 +100,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             stream: FirebaseFirestore.instance.collection('ADMIN_ACCOUNTS').doc(widget.userId).snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return Text('Loading...', style: TextStyle(color: Colors.black));
+                //Text('Loading...', style: TextStyle(color: Colors.black));
               }
               if (snapshot.hasError) {
                 return Text('Error: ${snapshot.error}', style: TextStyle(color: Colors.red));
