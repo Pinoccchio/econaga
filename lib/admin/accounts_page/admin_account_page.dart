@@ -40,6 +40,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
   File? idImage;
   File? selfieImage;
   bool _obscurePassword = true;
+  File? _profileImage;
 
   late List<FocusNode> _focusNodes;
 
@@ -49,6 +50,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
     'created_at': null,
     'contact_number': '',
     'role': 'admin',
+    'profile_picture_url': null,
   };
 
   @override
@@ -124,12 +126,13 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
               'created_at': data['created_at'],
               'contact_number': data['contact_number'] ?? '',
               'role': data['role'] ?? 'admin',
+              'profile_picture_url': data['profile_picture_url'],
             };
 
             // Set controller values
             _fullNameController.text = data['full_name'] ?? '';
             _contactNumberController.text = data['contact_number'] ?? '';
-            emailController.text = data['email'] ?? ''; // Set email controller
+            emailController.text = data['email'] ?? '';
             if (data['created_at'] != null) {
               _dateRegisteredController.text = DateFormat('MM/dd/yyyy')
                   .format((data['created_at'] as Timestamp).toDate());
@@ -164,15 +167,38 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
                       children: [
                         Column(
                           children: [
-                            CircleAvatar(
-                              radius: 50,
-                              backgroundColor: Colors.green.shade200,
-                              child: Text(
-                                _adminProfile['full_name']?.isNotEmpty == true
-                                    ? _adminProfile['full_name'][0].toUpperCase()
-                                    : 'A',
-                                style: TextStyle(fontSize: 40, color: Colors.green.shade700),
-                              ),
+                            Stack(
+                              children: [
+                                CircleAvatar(
+                                  radius: 50,
+                                  backgroundColor: Colors.green.shade200,
+                                  backgroundImage: _profileImage != null
+                                      ? FileImage(_profileImage!)
+                                      : (_adminProfile['profile_picture_url'] != null
+                                      ? NetworkImage(_adminProfile['profile_picture_url'] as String)
+                                      : null) as ImageProvider?,
+                                  child: _profileImage == null && _adminProfile['profile_picture_url'] == null
+                                      ? Text(
+                                    _adminProfile['full_name']?.isNotEmpty == true
+                                        ? _adminProfile['full_name'][0].toUpperCase()
+                                        : 'A',
+                                    style: TextStyle(fontSize: 40, color: Colors.green.shade700),
+                                  )
+                                      : null,
+                                ),
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: CircleAvatar(
+                                    backgroundColor: Colors.green.shade600,
+                                    radius: 18,
+                                    child: IconButton(
+                                      icon: Icon(Icons.camera_alt, size: 18, color: Colors.white),
+                                      onPressed: _updateProfilePicture,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             SizedBox(height: 10),
                             Text(
@@ -232,7 +258,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
 
   Widget _buildProfileInfoTab() {
     return Card(
-      elevation: 8,  // Added subtle shadow for modern effect
+      elevation: 8,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
       ),
@@ -242,7 +268,6 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Full Name Field
               TextFormField(
                 controller: _fullNameController,
                 decoration: InputDecoration(
@@ -253,8 +278,6 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
                 ),
               ),
               SizedBox(height: 16),
-
-              // Contact Number Field
               TextFormField(
                 controller: _contactNumberController,
                 decoration: InputDecoration(
@@ -266,26 +289,22 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
                 keyboardType: TextInputType.phone,
               ),
               SizedBox(height: 16),
-
-              // Non-editable Email Field
               TextFormField(
-                controller: emailController, // Email controller
-                readOnly: true, // Prevent editing
+                controller: emailController,
+                readOnly: true,
                 decoration: InputDecoration(
                   labelText: 'Email',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.email, color: Colors.green.shade700),
-                  fillColor: Colors.grey.shade100, // Grayish background
+                  fillColor: Colors.grey.shade100,
                   filled: true,
                   contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 12),
                 ),
                 style: TextStyle(
-                  color: Colors.grey.shade600, // Grayish text color
+                  color: Colors.grey.shade600,
                 ),
               ),
               SizedBox(height: 16),
-
-              // Date Registered Field
               TextFormField(
                 controller: _dateRegisteredController,
                 readOnly: true,
@@ -295,22 +314,20 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
                   prefixIcon: Icon(Icons.calendar_today, color: Colors.green.shade700),
                   contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 12),
                 ),
-                onTap: _selectDate,  // Date selection logic
+                onTap: _selectDate,
               ),
-              SizedBox(height: 32),  // Increased space between the fields and buttons
-
-              // Update Info Button
+              SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _updateAdminProfile,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green.shade600,  // Modern green color
+                    backgroundColor: Colors.green.shade600,
                     padding: EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),  // Rounded corners
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    elevation: 5,  // Subtle shadow
+                    elevation: 5,
                   ),
                   child: Text(
                     'Update Info',
@@ -321,9 +338,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
                   ),
                 ),
               ),
-              SizedBox(height: 16),  // Space between buttons
-
-              // Send Password Reset Email Button
+              SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -331,12 +346,12 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
                     _sendPasswordResetEmail(_adminProfile['email']);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade600,  // Modern blue color
+                    backgroundColor: Colors.blue.shade600,
                     padding: EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),  // Rounded corners
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    elevation: 5,  // Subtle shadow
+                    elevation: 5,
                   ),
                   child: Text(
                     'Send Reset Password Email to Admin Account',
@@ -354,14 +369,12 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
     );
   }
 
-
-  // Date Picker function
   Future<void> _selectDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
-      firstDate: DateTime(2000), // Allow selection from the year 2000
-      lastDate: DateTime.now(), // Restrict future dates
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
       builder: (BuildContext context, Widget? child) {
         return Theme(
           data: ThemeData.light().copyWith(
@@ -369,7 +382,6 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
             hintColor: Colors.green.shade700,
             buttonTheme: ButtonThemeData(textTheme: ButtonTextTheme.primary),
             colorScheme: ColorScheme.light(primary: Colors.green.shade700),
-            // Optionally customize other elements like header text style
             textTheme: TextTheme(
               headline6: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold),
             ),
@@ -405,7 +417,6 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
           ),
         );
 
-        // Reload admin profile
         _loadAdminProfile();
       }
     } catch (e) {
@@ -733,7 +744,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
       items: <String>['collector'].map<DropdownMenuItem<String>>((String value) {
         return DropdownMenuItem<String>(
           value: value,
-          child: Text(value.capitalize()),
+          child: Text('Driver'),
         );
       }).toList(),
     );
@@ -926,7 +937,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Collector account created successfully'),
+              content: Text('Driver account created successfully'),
               backgroundColor: Colors.green.shade600,
               duration: Duration(seconds: 3),
               action: SnackBarAction(
@@ -997,6 +1008,10 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
     idImage = null;
     selfieImage = null;
     setState(() {});
+    null;
+    idImage = null;
+    selfieImage = null;
+    setState(() {});
   }
 
   Widget _buildAccountList() {
@@ -1017,7 +1032,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return Center(
             child: Text(
-              'No collector accounts yet',
+              'No driver accounts yet',
               style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade700),
             ),
           );
@@ -1106,7 +1121,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
                       _buildDetailRow('Phone', accountData['phone_number']),
                       _buildDetailRow('Date of Birth', accountData['date_of_birth']),
                       _buildDetailRow('ID Type', accountData['id_type']),
-                      _buildDetailRow('Role', accountData['role']),
+                      _buildDetailRow('Role', accountData['role'] == 'collector' ? 'Driver' : accountData['role']),
                       _buildDetailRow('Truck Number', accountData['truck_number']),
                       _buildDetailRow('Collection Zone', accountData['collection_zone']['descriptive_location']),
                       _buildDetailRow('Status', accountData['status'] ?? 'Active'),
@@ -1344,6 +1359,55 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
       );
     }
   }
+
+  Future<void> _updateProfilePicture() async {
+    final ImagePicker _picker = ImagePicker();
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+
+    if (image != null) {
+      setState(() {
+        _profileImage = File(image.path);
+      });
+
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final ref = FirebaseStorage.instance
+              .ref()
+              .child('admin_profile_pictures')
+              .child('${user.uid}.jpg');
+
+          await ref.putFile(_profileImage!);
+          final url = await ref.getDownloadURL();
+
+          await FirebaseFirestore.instance
+              .collection('ADMIN_ACCOUNTS')
+              .doc(user.uid)
+              .update({'profile_picture_url': url});
+
+          setState(() {
+            _adminProfile['profile_picture_url'] = url;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Profile picture updated successfully'),
+              backgroundColor: Colors.green.shade600,
+            ),
+          );
+        }
+      } catch (e) {
+        print('Error updating profile picture: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update profile picture'),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    }
+  }
+
 }
 
 extension StringExtension on String {
@@ -1359,3 +1423,4 @@ String _formatDate(dynamic timestamp) {
   }
   return 'N/A';
 }
+

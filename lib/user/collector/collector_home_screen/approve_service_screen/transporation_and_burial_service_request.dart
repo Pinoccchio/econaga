@@ -79,7 +79,7 @@ class _TransportationAndBurialServiceScreenState extends State<TransportationAnd
         requestLng,
       );
 
-      return distance <= 1000; // Within 1 km // Update 3
+      return distance <= 2000; // Within 1 km // Update 3
     }).toList();
   }
 

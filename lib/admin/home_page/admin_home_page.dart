@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../accounts_page/admin_account_page.dart';
 import '../complaints_page/admin_complaints_page.dart';
 import '../requests_page/admin_burial_service.dart';
@@ -100,7 +101,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             stream: FirebaseFirestore.instance.collection('ADMIN_ACCOUNTS').doc(widget.userId).snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                //Text('Loading...', style: TextStyle(color: Colors.black));
+                return CircularProgressIndicator();
               }
               if (snapshot.hasError) {
                 return Text('Error: ${snapshot.error}', style: TextStyle(color: Colors.red));
@@ -111,6 +112,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               var userData = snapshot.data!.data() as Map<String, dynamic>;
               String email = userData['email'] ?? '';
               String fullName = userData['full_name'] ?? '';
+              String profilePictureUrl = userData['profile_picture_url'];
               String firstLetter = email.isNotEmpty ? email[0].toUpperCase() : 'U';
 
               return Row(
@@ -131,14 +133,22 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       });
                     },
                     child: CircleAvatar(
+                      radius: 20,
                       backgroundColor: Colors.green,
-                      child: Text(
-                        firstLetter,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      child: ClipOval(
+                        child: profilePictureUrl != null && profilePictureUrl.isNotEmpty
+                            ? CachedNetworkImage(
+                          imageUrl: profilePictureUrl,
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                          errorWidget: (context, url, error) => _buildProfileInitial(firstLetter),
+                        )
+                            : _buildProfileInitial(firstLetter),
                       ),
                     ),
                   ),
@@ -204,6 +214,19 @@ class _AdminHomePageState extends State<AdminHomePage> {
             child: _buildPageContent(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildProfileInitial(String initial) {
+    return Center(
+      child: Text(
+        initial,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

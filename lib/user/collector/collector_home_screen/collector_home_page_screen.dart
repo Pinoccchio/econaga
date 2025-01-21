@@ -350,7 +350,7 @@ class _CollectorHomePageState extends State<CollectorHomePage> {
                 requestLng,
               );
 
-              return distance <= 3000;
+              return distance <= 2000;
             }).length ?? 0;
 
             if (status == 'approved') {

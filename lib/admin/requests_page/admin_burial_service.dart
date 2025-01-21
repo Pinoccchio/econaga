@@ -35,13 +35,14 @@ class _AdminBurialServiceRequestState extends State<AdminBurialServiceRequest> {
         .orderBy('created_at', descending: true)
         .get();
 
-    if (mounted) {
-      setState(() {
-        allRequests = snapshot.docs;
-        filteredRequests = allRequests;
-        _updateStatusCounts();
-      });
-    }
+    setState(() {
+      allRequests = snapshot.docs;
+      filteredRequests = allRequests.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return data['status'] == 'pending';
+      }).toList();
+      _updateStatusCounts();
+    });
   }
 
   void _updateStatusCounts() {
@@ -69,7 +70,7 @@ class _AdminBurialServiceRequestState extends State<AdminBurialServiceRequest> {
       filteredRequests = allRequests.where((request) {
         final data = request.data() as Map<String, dynamic>;
         final fullName = '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}'.toLowerCase();
-        return fullName.contains(searchQuery.toLowerCase());
+        return fullName.contains(searchQuery.toLowerCase()) && data['status'] == 'pending';
       }).toList();
     });
   }
@@ -97,7 +98,7 @@ class _AdminBurialServiceRequestState extends State<AdminBurialServiceRequest> {
               SizedBox(height: 24),
               _buildStatusCards(),
               SizedBox(height: 24),
-              _buildTotalRequestsHeader(),
+              _buildPendingHeader(),
               SizedBox(height: 16),
               Expanded(
                 child: _buildRequestList(),
@@ -200,11 +201,11 @@ class _AdminBurialServiceRequestState extends State<AdminBurialServiceRequest> {
     );
   }
 
-  Widget _buildTotalRequestsHeader() {
+  Widget _buildPendingHeader() {
     return Row(
       children: [
         Text(
-          'Total Requests',
+          'Pending Requests',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -386,19 +387,13 @@ class _AdminBurialServiceRequestState extends State<AdminBurialServiceRequest> {
             _buildActionButton(
               'APPROVE',
               Colors.green,
-              status.toLowerCase() == 'declined' ? null : () => updateRequestStatus(request.id, 'approved'),
+                  () => updateRequestStatus(request.id, 'approved'),
             ),
             SizedBox(width: 8),
             _buildActionButton(
               'DECLINE',
               Colors.red,
-              status.toLowerCase() == 'approved' ? null : () => updateRequestStatus(request.id, 'declined'),
-            ),
-            SizedBox(width: 8),
-            _buildActionButton(
-              'DELETE',
-              Colors.blue,
-                  () => deleteRequest(request.id),
+                  () => updateRequestStatus(request.id, 'declined'),
             ),
           ],
         ),
@@ -440,11 +435,11 @@ class _AdminBurialServiceRequestState extends State<AdminBurialServiceRequest> {
     );
   }
 
-  Widget _buildActionButton(String text, Color color, VoidCallback? onPressed) {
+  Widget _buildActionButton(String text, Color color, VoidCallback onPressed) {
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: onPressed == null ? Colors.grey : color,
+        backgroundColor: color,
         foregroundColor: Colors.white,
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         shape: RoundedRectangleBorder(
@@ -512,15 +507,15 @@ class _AdminBurialServiceRequestState extends State<AdminBurialServiceRequest> {
     );
   }
 
-  void updateRequestStatus(String docId, String newStatus) {
+  void updateRequestStatus(String docId, String status) {
     FirebaseFirestore.instance
         .collection('BURIAL_REQUESTS')
         .doc(docId)
-        .update({'status': newStatus}).then((_) {
+        .update({'status': status}).then((_) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Request ${newStatus.toUpperCase()}'),
-          backgroundColor: newStatus == 'approved' ? Colors.green : Colors.red,
+          content: Text('Request ${status.toUpperCase()}'),
+          backgroundColor: status == 'approved' ? Colors.green : Colors.red,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
@@ -540,68 +535,6 @@ class _AdminBurialServiceRequestState extends State<AdminBurialServiceRequest> {
         ),
       );
     });
-  }
-
-  void deleteRequest(String docId) {
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text("Confirm Deletion", style: TextStyle(color: Colors.green[800])),
-          content: Text("Are you sure you want to delete this request?"),
-          backgroundColor: Colors.green[50],
-          actions: [
-            TextButton(
-              child: Text("Cancel", style: TextStyle(color: Colors.green[800])),
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-            ElevatedButton(
-              child: Text("Delete", style: TextStyle(color: Colors.white)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[800],
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                FirebaseFirestore.instance
-                    .collection('BURIAL_REQUESTS')
-                    .doc(docId)
-                    .delete()
-                    .then((_) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Request deleted successfully'),
-                        backgroundColor: Colors.green[800],
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    );
-                    _fetchRequests(); // Update the list and counts
-                  }
-                }).catchError((error) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to delete request: $error'),
-                        backgroundColor: Colors.red,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    );
-                  }
-                });
-              },
-            ),
-          ],
-        );
-      },
-    );
   }
 
   void _showDetailsDialog(BuildContext context, Map<String, dynamic> data) {

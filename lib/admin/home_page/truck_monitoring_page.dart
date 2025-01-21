@@ -31,6 +31,7 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
     super.dispose();
   }
 
+
   void _selectTruck(String truckId) {
     setState(() {
       _selectedTruckId = truckId;
@@ -46,12 +47,18 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
         .then((doc) {
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
-        final location = _showRealtimeLocation ? data['realtime_location'] : data['collection_zone'];
-        if (location != null) {
-          final position = _showRealtimeLocation
-              ? _parseRealtimeLocation(location)
-              : _parseCollectionZone(location);
-          _mapController.move(position, 14.0);
+        final realtimeLocation = data['realtime_location'];
+        final collectionZone = data['collection_zone'];
+        if (realtimeLocation != null && collectionZone != null) {
+          final truckPosition = _parseRealtimeLocation(realtimeLocation);
+          final zonePosition = _parseCollectionZone(collectionZone);
+          _mapController.move(
+            LatLng(
+              (truckPosition.latitude + zonePosition.latitude) / 2,
+              (truckPosition.longitude + zonePosition.longitude) / 2,
+            ),
+            13.0,
+          );
         }
       }
     });
@@ -68,6 +75,10 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
     final coordinates = collectionZone['coordinates'] as GeoPoint?;
     if (coordinates == null) return LatLng(0, 0);
     return LatLng(coordinates.latitude, coordinates.longitude);
+  }
+
+  double _calculateZoneRadius(Map<String, dynamic> collectionZone) {
+    return (collectionZone['radius'] as num?)?.toDouble() ?? 2000.0;
   }
 
   void _toggleLocationView() {
@@ -132,7 +143,8 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
                     'id': doc.id,
                     'name': '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}',
                     'truck_number': data['truck_number'] ?? '',
-                    'availability': data['truck_availability'] ?? 'Not set yet',
+                    'availability': data['availability'] ?? 'Not set yet',
+                    'truck_availability': data['truck_availability'] ?? 'Not set yet',
                     'phone': data['phone_number'] ?? '',
                     'email': data['email'] ?? '',
                     'realtime_location': data['realtime_location'] ?? {'latitude': 0.0, 'longitude': 0.0},
@@ -179,139 +191,226 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
   }
 
   Widget _buildMap(List<Map<String, dynamic>> collectors) {
-    return Stack(
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: LatLng(13.6216, 123.1948), // Naga City coordinates
+        initialZoom: 14.0,
+        onMapReady: () {
+          setState(() {
+            _isMapReady = true;
+          });
+        },
+      ),
       children: [
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            initialCenter: LatLng(13.6216, 123.1948), // Naga City coordinates
-            initialZoom: 14.0,
-            onMapReady: () {
-              setState(() {
-                _isMapReady = true;
-              });
-            },
-          ),
-          children: [
-            TileLayer(
-              urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-              subdomains: ['a', 'b', 'c'],
-            ),
-            MarkerLayer(
-              markers: collectors.expand((collector) {
-                LatLng realtimePosition = _parseRealtimeLocation(collector['realtime_location']);
-                LatLng collectionZonePosition = _parseCollectionZone(collector['collection_zone']);
-                return [
-                  Marker(
-                    point: realtimePosition,
-                    width: 40.0,
-                    height: 40.0,
-                    child: Icon(
+        TileLayer(
+          urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          subdomains: ['a', 'b', 'c'],
+        ),
+        CircleLayer(
+          circles: collectors.expand((collector) {
+            List<CircleMarker> circles = [];
+            if (!(collector['availability'] == 'Available' && collector['truck_availability'] == 'Available')) {
+              LatLng zoneCenter = _parseCollectionZone(collector['collection_zone']);
+              double zoneRadius = _calculateZoneRadius(collector['collection_zone']);
+
+              // Add circle for collection zone
+              circles.add(CircleMarker(
+                point: zoneCenter,
+                radius: zoneRadius,
+                useRadiusInMeter: true,
+                color: Colors.blue.withOpacity(0.2),
+                borderColor: Colors.blue,
+                borderStrokeWidth: 2,
+              ));
+            }
+            return circles;
+          }).toList(),
+        ),
+        MarkerLayer(
+          markers: collectors.expand((collector) {
+            List<Marker> markers = [];
+            if (!(collector['availability'] == 'Available' && collector['truck_availability'] == 'Available')) {
+              LatLng realtimePosition = _parseRealtimeLocation(collector['realtime_location']);
+              LatLng collectionZonePosition = _parseCollectionZone(collector['collection_zone']);
+
+              // Add truck icon with label
+              markers.add(Marker(
+                point: realtimePosition,
+                width: 60.0, // Increased to accommodate label
+                height: 60.0, // Increased to accommodate label
+                child: Column(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Text(
+                        collector['truck_number'].toString(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Icon(
                       Icons.local_shipping,
-                      color: _getAvailabilityColor(collector['availability']),
+                      color: _getAvailabilityColor(collector['availability'], collector['truck_availability']),
                       size: 40.0,
                     ),
-                  ),
-                  Marker(
-                    point: collectionZonePosition,
-                    width: 40.0,
-                    height: 40.0,
-                    child: Icon(
+                  ],
+                ),
+              ));
+
+              // Add location icon with label
+              markers.add(Marker(
+                point: collectionZonePosition,
+                width: 60.0, // Increased to accommodate label
+                height: 60.0, // Increased to accommodate label
+                child: Column(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Text(
+                        collector['truck_number'].toString(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Icon(
                       Icons.location_on,
                       color: Colors.blue,
                       size: 40.0,
                     ),
-                  ),
-                ];
-              }).toList(),
-            ),
-            PopupMarkerLayerWidget(
-              options: PopupMarkerLayerOptions(
-                popupController: _popupLayerController,
-                markers: collectors.expand((collector) {
-                  LatLng realtimePosition = _parseRealtimeLocation(collector['realtime_location']);
-                  LatLng collectionZonePosition = _parseCollectionZone(collector['collection_zone']);
-                  return [
-                    Marker(
-                      point: realtimePosition,
-                      width: 40.0,
-                      height: 40.0,
-                      child: Icon(
+                  ],
+                ),
+              ));
+            }
+            return markers;
+          }).toList(),
+        ),
+        PopupMarkerLayerWidget(
+          options: PopupMarkerLayerOptions(
+            popupController: _popupLayerController,
+            markers: collectors.expand((collector) {
+              List<Marker> markers = [];
+              if (!(collector['availability'] == 'Available' && collector['truck_availability'] == 'Available')) {
+                LatLng realtimePosition = _parseRealtimeLocation(collector['realtime_location']);
+                LatLng collectionZonePosition = _parseCollectionZone(collector['collection_zone']);
+
+                markers.add(Marker(
+                  point: realtimePosition,
+                  width: 60.0, // Increased to accommodate label
+                  height: 60.0, // Increased to accommodate label
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Text(
+                          collector['truck_number'].toString(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Icon(
                         Icons.local_shipping,
-                        color: _getAvailabilityColor(collector['availability']),
+                        color: _getAvailabilityColor(collector['availability'], collector['truck_availability']),
                         size: 40.0,
                       ),
-                    ),
-                    Marker(
-                      point: collectionZonePosition,
-                      width: 40.0,
-                      height: 40.0,
-                      child: Icon(
+                    ],
+                  ),
+                ));
+
+                markers.add(Marker(
+                  point: collectionZonePosition,
+                  width: 60.0, // Increased to accommodate label
+                  height: 60.0, // Increased to accommodate label
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Text(
+                          collector['truck_number'].toString(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Icon(
                         Icons.location_on,
                         color: Colors.blue,
                         size: 40.0,
                       ),
+                    ],
+                  ),
+                ));
+              }
+              return markers;
+            }).toList(),
+            popupDisplayOptions: PopupDisplayOptions(
+              builder: (BuildContext context, Marker marker) {
+                final collector = collectors.firstWhere(
+                      (c) => _parseRealtimeLocation(c['realtime_location']) == marker.point ||
+                      _parseCollectionZone(c['collection_zone']) == marker.point,
+                );
+                final isRealtimeLocation = _parseRealtimeLocation(collector['realtime_location']) == marker.point;
+                final zoneRadius = _calculateZoneRadius(collector['collection_zone']);
+                return Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Truck #: ${collector['truck_number']}'),
+                        Text('Driver: ${collector['name']}'),
+                        Text('Status: ${collector['availability'] ?? 'Not Set Yet'}'),
+                        Text('Truck Status: ${collector['truck_availability'] ?? 'Not Set Yet'}'),
+                        Text('Collection Zone: ${collector['collection_zone']['descriptive_location'] ?? 'Unknown'}'),
+                        Text('Coverage Radius: ${zoneRadius.toStringAsFixed(2)} meters'),
+                        Text(isRealtimeLocation ? 'Current Location' : 'Collection Zone'),
+                      ],
                     ),
-                  ];
-                }).toList(),
-                popupDisplayOptions: PopupDisplayOptions(
-                  builder: (BuildContext context, Marker marker) {
-                    final collector = collectors.firstWhere(
-                          (c) => _parseRealtimeLocation(c['realtime_location']) == marker.point ||
-                          _parseCollectionZone(c['collection_zone']) == marker.point,
-                    );
-                    final isRealtimeLocation = _parseRealtimeLocation(collector['realtime_location']) == marker.point;
-                    return Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('Truck #: ${collector['truck_number']}'),
-                            Text('Driver: ${collector['name']}'),
-                            Text('Status: ${collector['availability'] ?? 'Not Set Yet'}'),
-                            Text(isRealtimeLocation ? 'Current Location' : 'Collection Zone'),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-        if (_selectedTruckId != null)
-          Positioned(
-            bottom: 16,
-            right: 16,
-            child: FloatingActionButton.extended(
-              onPressed: _toggleLocationView,
-              icon: Icon(_showRealtimeLocation ? Icons.map : Icons.location_on),
-              label: Text(_showRealtimeLocation ? 'Show Zone' : 'Show Location'),
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-              ),
+                  ),
+                );
+              },
             ),
           ),
+        ),
       ],
     );
   }
 
-  Color _getAvailabilityColor(String availability) {
-    switch (availability.toLowerCase()) {
-      case 'available':
-        return Colors.green;
-      case 'in use':
-        return Colors.orange;
-      case 'under maintenance':
-        return Colors.red;
-      default:
-        return Colors.grey;
+  Color _getAvailabilityColor(String availability, String truckAvailability) {
+    if (availability == 'Available' && truckAvailability == 'Available') {
+      return Colors.green;
+    } else if (availability == 'On Duty' && truckAvailability == 'In Use') {
+      return Colors.orange;
+    } else {
+      return Colors.red;
     }
   }
 }
@@ -366,20 +465,17 @@ class TruckCard extends StatelessWidget {
   }
 
   Color _getAvailabilityColor() {
-    switch (collector['availability'].toLowerCase()) {
-      case 'available':
-        return Colors.green;
-      case 'in use':
-        return Colors.orange;
-      case 'under maintenance':
-        return Colors.red;
-      default:
-        return Colors.grey;
+    if (collector['availability'] == 'Available' && collector['truck_availability'] == 'Available') {
+      return Colors.green;
+    } else if (collector['availability'] == 'On Duty' && collector['truck_availability'] == 'In Use') {
+      return Colors.orange;
+    } else {
+      return Colors.red;
     }
   }
 
   String _getAvailabilityText() {
-    return collector['availability'] ?? 'Not Set Yet';
+    return collector['truck_availability'];
   }
 
   @override
@@ -446,7 +542,7 @@ class TruckCard extends StatelessWidget {
               ),
               _buildInfoRow(
                 Icons.map,
-                'Zone: ${(collector['collection_zone'] as Map<String, dynamic>)['descriptive_location'] ?? 'Unknown zone'}',
+                'Collection Zone: ${(collector['collection_zone'] as Map<String, dynamic>)['descriptive_location'] ?? 'Unknown zone'}',
               ),
               _buildInfoRow(
                 Icons.info_outline,

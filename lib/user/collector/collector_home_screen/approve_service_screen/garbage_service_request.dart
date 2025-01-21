@@ -174,7 +174,7 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
         requestLng,
       );
 
-      return distance <= 3000; // Within 1 km
+      return distance <= 2000; // Within 1 km
     }).toList();
   }
 

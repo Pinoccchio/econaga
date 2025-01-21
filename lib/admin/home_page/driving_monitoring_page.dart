@@ -437,7 +437,7 @@ class DriverListItem extends StatelessWidget {
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Zone: $collectionZone',
+                    'Collection Zone: $collectionZone',
                     style: TextStyle(
                       color: Colors.grey[600],
                     ),

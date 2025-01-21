@@ -20,11 +20,11 @@ class _BurialFilteredRequestScreenState extends State<BurialFilteredRequestScree
   @override
   void initState() {
     super.initState();
-    filteredRequests = _getFilteredRequests();
+    filteredRequests = _getFilteredRequests([]); // Initialize with empty list
   }
 
-  List<DocumentSnapshot> _getFilteredRequests() {
-    return widget.requests.where((request) {
+  List<DocumentSnapshot> _getFilteredRequests(List<DocumentSnapshot> allRequests) {
+    return allRequests.where((request) {
       final data = request.data() as Map<String, dynamic>;
       return (data['status'] as String).toLowerCase() == widget.status.toLowerCase();
     }).toList();
@@ -33,7 +33,7 @@ class _BurialFilteredRequestScreenState extends State<BurialFilteredRequestScree
   void _filterRequests(String query) {
     setState(() {
       searchQuery = query.toLowerCase();
-      filteredRequests = _getFilteredRequests().where((request) {
+      filteredRequests = _getFilteredRequests(widget.requests).where((request) {
         final data = request.data() as Map<String, dynamic>;
         final fullName = '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}'.toLowerCase();
         return fullName.contains(searchQuery);
@@ -48,30 +48,46 @@ class _BurialFilteredRequestScreenState extends State<BurialFilteredRequestScree
         title: Text('${widget.status.capitalize()} Requests'),
         backgroundColor: _getStatusColor(widget.status),
       ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          if (filteredRequests.isEmpty)
-            _buildEmptyState()
-          else
-            Expanded(
-              child: Column(
-                children: [
-                  _buildListHeader(),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: filteredRequests.length,
-                      itemBuilder: (context, index) {
-                        final request = filteredRequests[index];
-                        final data = request.data() as Map<String, dynamic>;
-                        return _buildRequestCard(request, data, index + 1);
-                      },
-                    ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('BURIAL_REQUESTS').snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          List<DocumentSnapshot> allRequests = snapshot.data!.docs;
+          filteredRequests = _getFilteredRequests(allRequests);
+
+          return Column(
+            children: [
+              _buildSearchBar(),
+              if (filteredRequests.isEmpty)
+                _buildEmptyState()
+              else
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildListHeader(),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: filteredRequests.length,
+                          itemBuilder: (context, index) {
+                            final request = filteredRequests[index];
+                            final data = request.data() as Map<String, dynamic>;
+                            return _buildRequestCard(request, data, index + 1);
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-        ],
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -261,6 +277,8 @@ class _BurialFilteredRequestScreenState extends State<BurialFilteredRequestScree
                 ),
               ),
             ),
+            SizedBox(width: 8),
+            _buildActionButtons(request.id, status),
           ],
         ),
       ),
@@ -460,6 +478,84 @@ class _BurialFilteredRequestScreenState extends State<BurialFilteredRequestScree
       default:
         return Colors.grey;
     }
+  }
+
+  Widget _buildActionButtons(String docId, String currentStatus) {
+    List<Widget> buttons = [];
+
+    if (currentStatus != 'completed') {
+      if (currentStatus != 'approved') {
+        buttons.add(_buildActionButton('APPROVE', Colors.green, () => updateRequestStatus(docId, 'approved')));
+      } else {
+        buttons.add(_buildActionButton('PENDING', Colors.orange, () => updateRequestStatus(docId, 'pending')));
+      }
+
+      if (currentStatus != 'declined') {
+        buttons.add(_buildActionButton('DECLINE', Colors.red, () => updateRequestStatus(docId, 'declined')));
+      } else {
+        buttons.add(_buildActionButton('PENDING', Colors.orange, () => updateRequestStatus(docId, 'pending')));
+      }
+    }
+
+    return Row(
+      children: buttons.map((button) => Padding(
+        padding: EdgeInsets.only(left: 8),
+        child: button,
+      )).toList(),
+    );
+  }
+
+  Widget _buildActionButton(String text, Color color, VoidCallback onPressed) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+        ),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  void updateRequestStatus(String docId, String newStatus) {
+    FirebaseFirestore.instance
+        .collection('BURIAL_REQUESTS')
+        .doc(docId)
+        .update({'status': newStatus}).then((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Request ${newStatus.toUpperCase()}'),
+          backgroundColor: _getStatusColor(newStatus),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      setState(() {
+        //filteredRequests = _getFilteredRequests(); //No need to refilter here, StreamBuilder handles updates
+      });
+    }).catchError((error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update status: $error'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    });
   }
 }
 
