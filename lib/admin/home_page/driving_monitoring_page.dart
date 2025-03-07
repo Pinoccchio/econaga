@@ -31,49 +31,6 @@ class _DrivingMonitoringPageState extends State<DrivingMonitoringPage> {
     super.dispose();
   }
 
-  void _toggleMapVisibility([String? driverId]) {
-    setState(() {
-      _isMapVisible = !_isMapVisible;
-      _selectedDriverId = _isMapVisible ? (driverId ?? _selectedDriverId) : null;
-    });
-
-    if (_isMapVisible && driverId != null) {
-      Future.delayed(Duration(milliseconds: 100), () {
-        if (_isMapReady) {
-          _moveMapToDriver(driverId);
-        }
-      });
-    }
-  }
-
-  void _toggleLocationView() {
-    setState(() {
-      _showRealtimeLocation = !_showRealtimeLocation;
-    });
-    if (_selectedDriverId != null) {
-      _moveMapToDriver(_selectedDriverId!);
-    }
-  }
-
-  void _moveMapToDriver(String driverId) {
-    FirebaseFirestore.instance
-        .collection('USERS_ACCOUNTS')
-        .doc(driverId)
-        .get()
-        .then((doc) {
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        final location = _showRealtimeLocation ? data['realtime_location'] : data['collection_zone'];
-        if (location != null) {
-          final position = _showRealtimeLocation
-              ? _parseRealtimeLocation(location)
-              : _parseCollectionZone(location);
-          _mapController.move(position, 14.0);
-        }
-      }
-    });
-  }
-
   LatLng _parseRealtimeLocation(Map<String, dynamic>? location) {
     double latitude = location?['latitude'] ?? 0.0;
     double longitude = location?['longitude'] ?? 0.0;
@@ -239,17 +196,6 @@ class _DrivingMonitoringPageState extends State<DrivingMonitoringPage> {
             ),
           ],
         ),
-        if (_selectedDriverId != null)
-          Positioned(
-            bottom: 16,
-            right: 16,
-            child: FloatingActionButton.extended(
-              onPressed: _toggleLocationView,
-              icon: Icon(_showRealtimeLocation ? Icons.map : Icons.location_on),
-              label: Text(_showRealtimeLocation ? 'Show Zone' : 'Show Location'),
-              backgroundColor: Colors.green,
-            ),
-          ),
       ],
     );
   }

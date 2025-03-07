@@ -20,6 +20,7 @@ class AdminAccountPage extends StatefulWidget {
 class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _formKey = GlobalKey<FormState>();
+  final _adminFormKey = GlobalKey<FormState>(); // New form key for admin creation
   final TextEditingController firstNameController = TextEditingController();
   final TextEditingController middleNameController = TextEditingController();
   final TextEditingController lastNameController = TextEditingController();
@@ -33,16 +34,25 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
   final TextEditingController _contactNumberController = TextEditingController();
   final TextEditingController _dateRegisteredController = TextEditingController();
 
+  // New controllers for admin account creation
+  final TextEditingController adminFullNameController = TextEditingController();
+  final TextEditingController adminEmailController = TextEditingController();
+  final TextEditingController adminPasswordController = TextEditingController();
+  final TextEditingController adminContactNumberController = TextEditingController();
+
   bool _isLoading = false;
+  bool _isAdminCreating = false; // New loading state for admin creation
   LatLng? selectedLocation;
   String? selectedIdType;
   String selectedRole = 'collector';
   File? idImage;
   File? selfieImage;
   bool _obscurePassword = true;
+  bool _obscureAdminPassword = true; // New password visibility toggle for admin creation
   File? _profileImage;
 
   late List<FocusNode> _focusNodes;
+  late List<FocusNode> _adminFocusNodes; // New focus nodes for admin creation form
 
   Map<String, dynamic> _adminProfile = {
     'full_name': '',
@@ -56,8 +66,9 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this); // Changed from 2 to 3 tabs
     _focusNodes = List.generate(9, (index) => FocusNode());
+    _adminFocusNodes = List.generate(4, (index) => FocusNode()); // 4 focus nodes for admin creation form
     _loadAdminProfile();
   }
 
@@ -85,6 +96,11 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
                   style: GoogleFonts.poppins(color: Colors.white)
               ),
             ),
+            Tab(
+              child: Text('Create Admin',
+                  style: GoogleFonts.poppins(color: Colors.white)
+              ),
+            ),
           ],
           indicatorColor: Colors.white,
         ),
@@ -94,6 +110,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
         children: [
           _buildAdminProfileTab(),
           _buildAccountManagementTab(),
+          _buildCreateAdminTab(), // New tab for admin creation
         ],
       ),
     );
@@ -105,7 +122,218 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
     for (var node in _focusNodes) {
       node.dispose();
     }
+    for (var node in _adminFocusNodes) {
+      node.dispose();
+    }
+    adminFullNameController.dispose();
+    adminEmailController.dispose();
+    adminPasswordController.dispose();
+    adminContactNumberController.dispose();
     super.dispose();
+  }
+
+  // New method to build the Create Admin tab
+  Widget _buildCreateAdminTab() {
+    return Container(
+      color: Colors.green.shade50,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Form(
+          key: _adminFormKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Create Admin Account',
+                style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green.shade700),
+              ),
+              SizedBox(height: 20),
+              _buildAdminTextField(
+                  adminFullNameController,
+                  'Full Name',
+                  Icons.person,
+                  focusNode: _adminFocusNodes[0],
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter full name';
+                    }
+                    return null;
+                  }
+              ),
+              SizedBox(height: 16),
+              _buildAdminTextField(
+                  adminEmailController,
+                  'Email',
+                  Icons.email,
+                  keyboardType: TextInputType.emailAddress,
+                  focusNode: _adminFocusNodes[1],
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter email';
+                    }
+                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      return 'Please enter a valid email';
+                    }
+                    return null;
+                  }
+              ),
+              SizedBox(height: 16),
+              _buildAdminTextField(
+                  adminPasswordController,
+                  'Password',
+                  Icons.lock,
+                  obscureText: _obscureAdminPassword,
+                  focusNode: _adminFocusNodes[2],
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureAdminPassword ? Icons.visibility : Icons.visibility_off,
+                      color: Colors.green.shade700,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscureAdminPassword = !_obscureAdminPassword;
+                      });
+                    },
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter password';
+                    }
+                    if (value.length < 6) {
+                      return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  }
+              ),
+              SizedBox(height: 16),
+              _buildAdminTextField(
+                  adminContactNumberController,
+                  'Contact Number',
+                  Icons.phone,
+                  keyboardType: TextInputType.phone,
+                  focusNode: _adminFocusNodes[3],
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter contact number';
+                    }
+                    return null;
+                  }
+              ),
+              SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isAdminCreating ? null : _createAdminAccount,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade600,
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 5,
+                  ),
+                  child: Text(
+                    _isAdminCreating ? 'Creating...' : 'Create Admin Account',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Helper method for admin form fields
+  Widget _buildAdminTextField(
+      TextEditingController controller,
+      String label,
+      IconData icon, {
+        bool obscureText = false,
+        TextInputType keyboardType = TextInputType.text,
+        required FocusNode focusNode,
+        Widget? suffixIcon,
+        String? Function(String?)? validator,
+      }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      focusNode: focusNode,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.green.shade700),
+        suffixIcon: suffixIcon,
+        border: OutlineInputBorder(borderSide: BorderSide(color: Colors.green.shade200)),
+        focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.green.shade700)),
+        filled: true,
+        fillColor: Colors.white,
+      ),
+    );
+  }
+
+  // Method to create admin account
+  Future<void> _createAdminAccount() async {
+    if (_adminFormKey.currentState!.validate()) {
+      bool confirm = await _showConfirmationDialog(
+          'Create Admin Account',
+          'Are you sure you want to create a new admin account?'
+      );
+
+      if (!confirm) return;
+
+      setState(() {
+        _isAdminCreating = true;
+      });
+
+      try {
+        // Create user with email and password
+        UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: adminEmailController.text.trim(),
+          password: adminPasswordController.text.trim(),
+        );
+
+        // Add user data to Firestore
+        await FirebaseFirestore.instance.collection('ADMIN_ACCOUNTS').doc(userCredential.user?.uid).set({
+          'full_name': adminFullNameController.text.trim(),
+          'email': adminEmailController.text.trim(),
+          'contact_number': adminContactNumberController.text.trim(),
+          'created_at': FieldValue.serverTimestamp(),
+          'role': 'admin',
+        });
+
+        // Clear form
+        adminFullNameController.clear();
+        adminEmailController.clear();
+        adminPasswordController.clear();
+        adminContactNumberController.clear();
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Admin account created successfully'),
+            backgroundColor: Colors.green.shade600,
+          ),
+        );
+      } catch (e) {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating admin account: $e'),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      } finally {
+        setState(() {
+          _isAdminCreating = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadAdminProfile() async {
@@ -383,7 +611,7 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
             buttonTheme: ButtonThemeData(textTheme: ButtonTextTheme.primary),
             colorScheme: ColorScheme.light(primary: Colors.green.shade700),
             textTheme: TextTheme(
-              headline6: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold),
+              titleSmall: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold), // Updated here
             ),
           ),
           child: child!,
@@ -398,6 +626,13 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
   }
 
   Future<void> _updateAdminProfile() async {
+    bool confirm = await _showConfirmationDialog(
+        'Update Profile',
+        'Are you sure you want to update your profile information?'
+    );
+
+    if (!confirm) return;
+
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
@@ -884,6 +1119,13 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
         return;
       }
 
+      bool confirm = await _showConfirmationDialog(
+          'Create Driver Account',
+          'Are you sure you want to create a new driver account?'
+      );
+
+      if (!confirm) return;
+
       _formKey.currentState!.save();
 
       if (!mounted) return;
@@ -1005,10 +1247,6 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
     addressController.clear();
     selectedIdType = null;
     selectedLocation = null;
-    idImage = null;
-    selfieImage = null;
-    setState(() {});
-    null;
     idImage = null;
     selfieImage = null;
     setState(() {});
@@ -1177,8 +1415,8 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
                   TextButton(
                     child: Text(accountData['status'] == 'inactive' ? 'Activate' : 'Deactivate', style: TextStyle(color: Colors.white)),
                     style: TextButton.styleFrom(backgroundColor: Colors.orange),
-                    onPressed: () {
-                      _toggleAccountStatus(accountId, accountData['status'] ?? 'active');
+                    onPressed: () async {
+                      await _toggleAccountStatus(accountId, accountData['status'] ?? 'active');
                       Navigator.of(context).pop();
                     },
                   ),
@@ -1217,9 +1455,16 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
     );
   }
 
-  void _toggleAccountStatus(String accountId, String currentStatus) async {
+   _toggleAccountStatus(String accountId, String currentStatus) async {
+    String newStatus = currentStatus == 'active' ? 'inactive' : 'active';
+    bool confirm = await _showConfirmationDialog(
+        '${newStatus.capitalize()} Account',
+        'Are you sure you want to ${newStatus == 'active' ? 'activate' : 'deactivate'} this account?'
+    );
+
+    if (!confirm) return;
+
     try {
-      String newStatus = currentStatus == 'active' ? 'inactive' : 'active';
       await FirebaseFirestore.instance.collection('USERS_ACCOUNTS').doc(accountId).update({
         'status': newStatus,
       });
@@ -1229,12 +1474,6 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
             content: Text('Account ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully'),
             backgroundColor: Colors.green.shade600,
             duration: Duration(seconds: 3),
-            action: SnackBarAction(
-              label: 'Dismiss',
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              },
-            ),
           ),
         );
         setState(() {});
@@ -1246,12 +1485,6 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
             content: Text('Error updating account status: $e'),
             backgroundColor: Colors.red.shade600,
             duration: Duration(seconds: 3),
-            action: SnackBarAction(
-              label: 'Dismiss',
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              },
-            ),
           ),
         );
       }
@@ -1259,66 +1492,34 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
   }
 
   void _deleteAccount(String accountId) async {
-    Navigator.of(context).pop();
-
-    bool? confirmDelete = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Confirm Delete', style: TextStyle(color: Colors.green.shade700)),
-          content: Text('Are you sure you want to delete this account?'),
-          backgroundColor: Colors.green.shade50,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          actions: <Widget>[
-            TextButton(
-              child: Text('Cancel', style: TextStyle(color: Colors.green.shade700)),
-              onPressed: () => Navigator.of(context).pop(false),
-            ),
-            ElevatedButton(
-              child: Text('Delete', style: TextStyle(color: Colors.white)),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700),
-              onPressed: () => Navigator.of(context).pop(true),
-            ),
-          ],
-        );
-      },
+    bool confirmDelete = await _showConfirmationDialog(
+        'Delete Account',
+        'Are you sure you want to delete this account? This action cannot be undone.'
     );
 
-    if (confirmDelete == true) {
-      try {
-        await FirebaseFirestore.instance.collection('USERS_ACCOUNTS').doc(accountId).delete();
+    if (!confirmDelete) return;
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Account deleted successfully'),
-              backgroundColor: Colors.green.shade600,
-              duration: Duration(seconds: 3),
-              action: SnackBarAction(
-                label: 'Dismiss',
-                onPressed: () {
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                },
-              ),
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error deleting account: $e'),
-              backgroundColor: Colors.red.shade600,
-              duration: Duration(seconds: 3),
-              action: SnackBarAction(
-                label: 'Dismiss',
-                onPressed: () {
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                },
-              ),
-            ),
-          );
-        }
+    try {
+      await FirebaseFirestore.instance.collection('USERS_ACCOUNTS').doc(accountId).delete();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Account deleted successfully'),
+            backgroundColor: Colors.green.shade600,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting account: $e'),
+            backgroundColor: Colors.red.shade600,
+            duration: Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
@@ -1328,6 +1529,13 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
   }
 
   void _sendPasswordResetEmail(String email) async {
+    bool confirm = await _showConfirmationDialog(
+        'Reset Password',
+        'Are you sure you want to send a password reset email to $email?'
+    );
+
+    if (!confirm) return;
+
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1408,6 +1616,30 @@ class _AdminAccountPageState extends State<AdminAccountPage> with SingleTickerPr
     }
   }
 
+  Future<bool> _showConfirmationDialog(String title, String content) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title, style: TextStyle(color: Colors.green.shade700)),
+          content: Text(content),
+          backgroundColor: Colors.green.shade50,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel', style: TextStyle(color: Colors.green.shade700)),
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            ElevatedButton(
+              child: Text('Confirm', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        );
+      },
+    ) ?? false;
+  }
 }
 
 extension StringExtension on String {

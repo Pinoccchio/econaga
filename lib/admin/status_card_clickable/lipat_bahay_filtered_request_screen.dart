@@ -16,11 +16,18 @@ class LipatBahayFilteredRequestScreen extends StatefulWidget {
 class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequestScreen> {
   late List<DocumentSnapshot> filteredRequests;
   String searchQuery = '';
+  bool _mounted = true;
 
   @override
   void initState() {
     super.initState();
-    filteredRequests = _getFilteredRequests([]);
+    filteredRequests = _getFilteredRequests(widget.requests);
+  }
+
+  @override
+  void dispose() {
+    _mounted = false;
+    super.dispose();
   }
 
   List<DocumentSnapshot> _getFilteredRequests(List<DocumentSnapshot> allRequests) {
@@ -31,6 +38,7 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
   }
 
   void _filterRequests(String query) {
+    if (!_mounted) return;
     setState(() {
       searchQuery = query.toLowerCase();
       filteredRequests = _getFilteredRequests(widget.requests).where((request) {
@@ -41,6 +49,28 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
     });
   }
 
+  Future<void> _fetchRequests() async {
+    if (!_mounted) return;
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('TRANSPORTATION_REQUESTS')
+          .orderBy('created_at', descending: true)
+          .get();
+
+      if (_mounted) {
+        setState(() {
+          filteredRequests = _getFilteredRequests(snapshot.docs);
+        });
+      }
+    } catch (e) {
+      if (_mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error fetching requests: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -48,46 +78,30 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
         title: Text('${widget.status.capitalize()} Requests'),
         backgroundColor: _getStatusColor(widget.status),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('TRANSPORTATION_REQUESTS').snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-
-          List<DocumentSnapshot> allRequests = snapshot.data!.docs;
-          filteredRequests = _getFilteredRequests(allRequests);
-
-          return Column(
-            children: [
-              _buildSearchBar(),
-              if (filteredRequests.isEmpty)
-                _buildEmptyState()
-              else
-                Expanded(
-                  child: Column(
-                    children: [
-                      _buildListHeader(),
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: filteredRequests.length,
-                          itemBuilder: (context, index) {
-                            final request = filteredRequests[index];
-                            final data = request.data() as Map<String, dynamic>;
-                            return _buildRequestCard(request, data, index + 1);
-                          },
-                        ),
-                      ),
-                    ],
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          if (filteredRequests.isEmpty)
+            _buildEmptyState()
+          else
+            Expanded(
+              child: Column(
+                children: [
+                  _buildListHeader(),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: filteredRequests.length,
+                      itemBuilder: (context, index) {
+                        final request = filteredRequests[index];
+                        final data = request.data() as Map<String, dynamic>;
+                        return _buildRequestCard(request, data, index + 1);
+                      },
+                    ),
                   ),
-                ),
-            ],
-          );
-        },
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -150,8 +164,8 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          SizedBox(width: 40), // Space for numbering
-          SizedBox(width: 52), // Space for avatar
+          SizedBox(width: 40),
+          SizedBox(width: 52),
           Expanded(
             flex: 2,
             child: Text(
@@ -226,7 +240,7 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
                 ),
               ),
             ),
-            _buildProfilePicture(data['user_id'] ?? ''),
+            _buildProfilePicture(data['user_id'] ?? '', firstName, lastName),
             SizedBox(width: 12),
             Expanded(
               flex: 2,
@@ -243,7 +257,7 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
                   ),
                   SizedBox(height: 4),
                   Text(
-                    'Created: ${DateFormat('MM/dd/yyyy').format(requestDate)}',
+                    'Created: ${DateFormat('MM/dd/yyyy hh:mm a').format(requestDate)}',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey[600],
@@ -276,7 +290,6 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
                 ),
               ),
             ),
-            _buildActionButtons(request.id, status),
           ],
         ),
       ),
@@ -317,7 +330,27 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
     );
   }
 
-  Widget _buildProfilePicture(String userId) {
+  Widget _buildProfilePicture(String userId, String firstName, String lastName) {
+    if (userId.isEmpty) {
+      return Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.grey[200],
+        ),
+        child: Center(
+          child: Text(
+            _getInitial(firstName, lastName),
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      );
+    }
+
     return Container(
       width: 40,
       height: 40,
@@ -331,7 +364,7 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
           if (!snapshot.hasData || !snapshot.data!.exists) {
             return Center(
               child: Text(
-                userId.isNotEmpty ? userId[0].toUpperCase() : 'U',
+                _getInitial(firstName, lastName),
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontWeight: FontWeight.bold,
@@ -346,7 +379,7 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
           if (profilePicUrl.isEmpty) {
             return Center(
               child: Text(
-                userId[0].toUpperCase(),
+                _getInitial(firstName, lastName),
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontWeight: FontWeight.bold,
@@ -360,87 +393,18 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
               imageUrl: profilePicUrl,
               fit: BoxFit.cover,
               placeholder: (context, url) => CircularProgressIndicator(),
-              errorWidget: (context, url, error) => Icon(Icons.person),
+              errorWidget: (context, url, error) => Text(
+                _getInitial(firstName, lastName),
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           );
         },
       ),
     );
-  }
-
-  Widget _buildActionButtons(String docId, String currentStatus) {
-    List<Widget> buttons = [];
-
-    if (currentStatus != 'completed') {
-      if (currentStatus != 'approved') {
-        buttons.add(_buildActionButton('APPROVE', Colors.green, () => updateRequestStatus(docId, 'approved')));
-      } else {
-        buttons.add(_buildActionButton('PENDING', Colors.orange, () => updateRequestStatus(docId, 'pending')));
-      }
-
-      if (currentStatus != 'declined') {
-        buttons.add(_buildActionButton('DECLINE', Colors.red, () => updateRequestStatus(docId, 'declined')));
-      } else {
-        buttons.add(_buildActionButton('PENDING', Colors.orange, () => updateRequestStatus(docId, 'pending')));
-      }
-    }
-
-    return Row(
-      children: buttons.map((button) => Padding(
-        padding: EdgeInsets.only(left: 8),
-        child: button,
-      )).toList(),
-    );
-  }
-
-  Widget _buildActionButton(String text, Color color, VoidCallback onPressed) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-        ),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  void updateRequestStatus(String docId, String newStatus) {
-    FirebaseFirestore.instance
-        .collection('TRANSPORTATION_REQUESTS')
-        .doc(docId)
-        .update({'status': newStatus}).then((_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Request ${newStatus.toUpperCase()}'),
-          backgroundColor: _getStatusColor(newStatus),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-    }).catchError((error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update status: $error'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-    });
   }
 
   void _showDetailsDialog(BuildContext context, Map<String, dynamic> data) {
@@ -488,8 +452,10 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
                   _buildDetailItem("Contact Number", data['contact_number'] ?? 'N/A'),
                   _buildDetailItem("Pickup Address", pickupLocation['address'] ?? 'N/A'),
                   _buildDetailItem("Destination Address", destinationLocation['address'] ?? 'N/A'),
+                  _buildDetailItem("Note", data['note'] ?? 'N/A'),
                   _buildDetailItem("Status", data['status'] ?? 'pending'),
-                  _buildDetailItem("Created Date", DateFormat('MM/dd/yyyy').format((data['created_at'] as Timestamp).toDate())),
+                  _buildDetailItem("User Type", data['user_type'] ?? 'N/A'),
+                  _buildDetailItem("Created Date/Time", DateFormat('MM/dd/yyyy hh:mm a').format((data['created_at'] as Timestamp).toDate())),
                   _buildDetailItem("Requested Date/Time", DateFormat('MM/dd/yyyy hh:mm a').format((data['requested_date_time'] as Timestamp).toDate())),
                   SizedBox(height: 24),
                   TextButton(
@@ -556,6 +522,16 @@ class _LipatBahayFilteredRequestScreenState extends State<LipatBahayFilteredRequ
 extension StringExtension on String {
   String capitalize() {
     return "${this[0].toUpperCase()}${this.substring(1)}";
+  }
+}
+
+String _getInitial(String firstName, String lastName) {
+  if (firstName.isNotEmpty) {
+    return firstName[0].toUpperCase();
+  } else if (lastName.isNotEmpty) {
+    return lastName[0].toUpperCase();
+  } else {
+    return '?';
   }
 }
 

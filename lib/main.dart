@@ -6,11 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:econaga_prj/admin/home_page/admin_welcome_screen.dart';
-import 'package:econaga_prj/admin/home_page/admin_sign_in_page.dart';
 import 'package:econaga_prj/designs/app_colors.dart';
 import 'package:econaga_prj/firebase_options.dart';
-import 'package:econaga_prj/user/collector/collector_home_screen/collector_container_screen.dart';
-import 'package:econaga_prj/user/login_as_screen/login_as_screen.dart';
 import 'package:econaga_prj/user/welcome_screen/welcome_screen.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -114,7 +111,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Econaga',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.green,
       ),
       debugShowCheckedModeBanner: false,
       home: _getHomePage(),

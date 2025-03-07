@@ -4,6 +4,15 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
+import 'package:flutter_typeahead/flutter_typeahead.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:google_places_flutter/google_places_flutter.dart';
+import 'package:google_places_flutter/model/prediction.dart';
+import 'request_form_page.dart';
 
 class DashboardContent extends StatefulWidget {
   @override
@@ -197,14 +206,12 @@ class _SecondPageState extends State<_SecondPage> {
     Map<DateTime, List<ServiceRequest>> newEvents = {};
 
     DateTime now = DateTime.now();
-    DateTime startDate = now.add(Duration(days: 3));
     DateTime endDate = now.add(Duration(days: 365)); // Fetch events for up to a year
 
     // Load Garbage Requests
     QuerySnapshot garbageSnapshot = await FirebaseFirestore.instance
         .collection('GARBAGE_REQUESTS')
         .where('status', isEqualTo: 'approved')
-        .where('requested_date_time', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
         .where('requested_date_time', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
         .get();
 
@@ -216,7 +223,6 @@ class _SecondPageState extends State<_SecondPage> {
     QuerySnapshot transportationSnapshot = await FirebaseFirestore.instance
         .collection('TRANSPORTATION_REQUESTS')
         .where('status', isEqualTo: 'approved')
-        .where('requested_date_time', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
         .where('requested_date_time', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
         .get();
 
@@ -228,7 +234,6 @@ class _SecondPageState extends State<_SecondPage> {
     QuerySnapshot burialSnapshot = await FirebaseFirestore.instance
         .collection('BURIAL_REQUESTS')
         .where('status', isEqualTo: 'approved')
-        .where('requested_date_time', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
         .where('requested_date_time', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
         .get();
 
@@ -277,25 +282,29 @@ class _SecondPageState extends State<_SecondPage> {
       DateTime normalizedDate = DateTime(requestDate.year, requestDate.month, requestDate.day);
 
       // Fetch user profile data
-      DocumentSnapshot userSnapshot = await FirebaseFirestore.instance
-          .collection('USERS_ACCOUNTS')
-          .doc(data['user_id'])
-          .get();
-
+      String userId = data['user_id'] as String? ?? '';
       String profilePicture = '';
-      if (userSnapshot.exists) {
-        var userData = userSnapshot.data() as Map<String, dynamic>;
-        profilePicture = userData['selfieImageUrl'] as String? ?? '';
+
+      if (userId.isNotEmpty) {
+        DocumentSnapshot userSnapshot = await FirebaseFirestore.instance
+            .collection('USERS_ACCOUNTS')
+            .doc(userId)
+            .get();
+
+        if (userSnapshot.exists) {
+          var userData = userSnapshot.data() as Map<String, dynamic>?;
+          profilePicture = userData?['selfieImageUrl'] as String? ?? '';
+        }
       }
 
       ServiceRequest request = ServiceRequest(
         type: serviceType,
-        requestorName: '${data['first_name']} ${data['last_name']}',
+        requestorName: '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}',
         time: DateFormat('h:mm a').format(requestDate),
         details: note,
         pickupAddress: pickupAddress,
         destinationAddress: destinationAddress,
-        userId: data['user_id'],
+        userId: userId,
         profilePicture: profilePicture,
         contactNumber: data['contact_number'] as String? ?? '',
         email: data['email'] as String? ?? '',
@@ -311,9 +320,8 @@ class _SecondPageState extends State<_SecondPage> {
   }
 
   List<ServiceRequest> _getEventsForDay(DateTime day) {
-    DateTime now = DateTime.now();
-    DateTime thresholdDate = now.add(Duration(days: 3));
-    if (day.isBefore(thresholdDate)) {
+    // Only check if the day is before today, allowing all future dates
+    if (day.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day))) {
       return [];
     }
     return _events[DateTime(day.year, day.month, day.day)] ?? [];
@@ -321,103 +329,161 @@ class _SecondPageState extends State<_SecondPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.green.shade900.withOpacity(0.8),
-            Colors.green.shade700.withOpacity(0.8),
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.green.shade900.withOpacity(0.8),
+              Colors.green.shade700.withOpacity(0.8),
+            ],
+          ),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Text(
+                'Service Requests Calendar',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Card(
+                margin: EdgeInsets.all(20.0),
+                elevation: 10,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Column(
+                  children: [
+                    TableCalendar(
+                      firstDay: DateTime.now().subtract(Duration(days: 365)),
+                      lastDay: DateTime.now().add(Duration(days: 365)),
+                      focusedDay: _focusedDay,
+                      calendarFormat: _calendarFormat,
+                      eventLoader: _getEventsForDay,
+                      selectedDayPredicate: (day) {
+                        return isSameDay(_selectedDay, day);
+                      },
+                      onDaySelected: (selectedDay, focusedDay) {
+                        setState(() {
+                          _selectedDay = selectedDay;
+                          _focusedDay = focusedDay;
+                        });
+                      },
+                      onFormatChanged: (format) {
+                        setState(() {
+                          _calendarFormat = format;
+                        });
+                      },
+                      onPageChanged: (focusedDay) {
+                        _focusedDay = focusedDay;
+                      },
+                      calendarStyle: CalendarStyle(
+                        todayDecoration: BoxDecoration(
+                          color: Colors.green.shade300,
+                          shape: BoxShape.circle,
+                        ),
+                        selectedDecoration: BoxDecoration(
+                          color: Colors.green.shade600,
+                          shape: BoxShape.circle,
+                        ),
+                        markerDecoration: BoxDecoration(
+                          color: Colors.green.shade800,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      headerStyle: HeaderStyle(
+                        formatButtonDecoration: BoxDecoration(
+                          color: Colors.green.shade600,
+                          borderRadius: BorderRadius.circular(20.0),
+                        ),
+                        formatButtonTextStyle: TextStyle(color: Colors.white),
+                        titleCentered: true,
+                      ),
+                      enabledDayPredicate: (day) {
+                        // Enable all dates from today onwards
+                        return !day.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day));
+                      },
+                    ),
+                    Expanded(
+                      child: _selectedDay == null
+                          ? Center(
+                        child: Text(
+                          'Select a day to view requests',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      )
+                          : _buildEventList(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Text(
-              'Service Requests Calendar',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Card(
-              margin: EdgeInsets.all(20.0),
-              elevation: 10,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Column(
-                children: [
-                  TableCalendar(
-                    firstDay: DateTime.now().subtract(Duration(days: 365)),
-                    lastDay: DateTime.now().add(Duration(days: 365)),
-                    focusedDay: _focusedDay,
-                    calendarFormat: _calendarFormat,
-                    eventLoader: _getEventsForDay,
-                    selectedDayPredicate: (day) {
-                      return isSameDay(_selectedDay, day);
-                    },
-                    onDaySelected: (selectedDay, focusedDay) {
-                      setState(() {
-                        _selectedDay = selectedDay;
-                        _focusedDay = focusedDay;
-                      });
-                    },
-                    onFormatChanged: (format) {
-                      setState(() {
-                        _calendarFormat = format;
-                      });
-                    },
-                    onPageChanged: (focusedDay) {
-                      _focusedDay = focusedDay;
-                    },
-                    calendarStyle: CalendarStyle(
-                      todayDecoration: BoxDecoration(
-                        color: Colors.green.shade300,
-                        shape: BoxShape.circle,
-                      ),
-                      selectedDecoration: BoxDecoration(
-                        color: Colors.green.shade600,
-                        shape: BoxShape.circle,
-                      ),
-                      markerDecoration: BoxDecoration(
-                        color: Colors.green.shade800,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    headerStyle: HeaderStyle(
-                      formatButtonDecoration: BoxDecoration(
-                        color: Colors.green.shade600,
-                        borderRadius: BorderRadius.circular(20.0),
-                      ),
-                      formatButtonTextStyle: TextStyle(color: Colors.white),
-                      titleCentered: true,
-                    ),
-                    enabledDayPredicate: (day) {
-                      return day.isAfter(DateTime.now().add(Duration(days: 2)));
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showBookingForm(context, _selectedDay ?? DateTime.now()),
+        child: Icon(Icons.add),
+        backgroundColor: Colors.green,
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  void _showEventList(DateTime selectedDay) {
+    List<ServiceRequest> events = _getEventsForDay(selectedDay);
+    if (events.isNotEmpty) {
+      showModalBottomSheet(
+        context: context,
+        builder: (BuildContext context) {
+          return Container(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Events for ${DateFormat('MMMM d, yyyy').format(selectedDay)}',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 16),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: events.length,
+                    itemBuilder: (context, index) {
+                      final event = events[index];
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: _getServiceColor(event.type),
+                          child: Icon(_getServiceIcon(event.type), color: Colors.white),
+                        ),
+                        title: Text(event.requestorName),
+                        subtitle: Text('${event.type} - ${event.time}'),
+                        onTap: () => _showDetailDialog(context, event),
+                      );
                     },
                   ),
-                  Expanded(
-                    child: _selectedDay == null
-                        ? Center(
-                      child: Text(
-                        'Select a day to view requests',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    )
-                        : _buildEventList(),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ),
-        ],
+          );
+        },
+      );
+    }
+  }
+
+  void _showBookingForm(BuildContext context, DateTime selectedDay) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => RequestFormPage(selectedDate: selectedDay),
       ),
     );
   }
@@ -447,19 +513,7 @@ class _SecondPageState extends State<_SecondPage> {
           ),
           child: ListTile(
             contentPadding: EdgeInsets.all(16),
-            leading: CircleAvatar(
-              radius: 30,
-              backgroundColor: _getServiceColor(event.type),
-              backgroundImage: event.profilePicture.isNotEmpty
-                  ? CachedNetworkImageProvider(event.profilePicture)
-                  : null,
-              child: event.profilePicture.isEmpty
-                  ? Icon(
-                _getServiceIcon(event.type),
-                color: Colors.white,
-              )
-                  : null,
-            ),
+            leading: _buildProfilePicture(event.userId, event.requestorName),
             title: Text(
               event.requestorName,
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -510,20 +564,7 @@ class _SecondPageState extends State<_SecondPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Center(
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundColor: _getServiceColor(event.type),
-                      backgroundImage: event.profilePicture.isNotEmpty
-                          ? CachedNetworkImageProvider(event.profilePicture)
-                          : null,
-                      child: event.profilePicture.isEmpty
-                          ? Icon(
-                        _getServiceIcon(event.type),
-                        color: Colors.white,
-                        size: 50,
-                      )
-                          : null,
-                    ),
+                    child: _buildProfilePicture(event.userId, event.requestorName),
                   ),
                   SizedBox(height: 20),
                   _buildDetailRow('Name', event.requestorName),
@@ -597,6 +638,67 @@ class _SecondPageState extends State<_SecondPage> {
       default:
         return Icons.event;
     }
+  }
+
+  Widget _buildProfilePicture(String userId, String userName) {
+    if (userId.isEmpty) {
+      return _buildInitialAvatar(userName);
+    }
+
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.grey[200],
+      ),
+      child: FutureBuilder<DocumentSnapshot>(
+        future: FirebaseFirestore.instance.collection('USERS_ACCOUNTS').doc(userId).get(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return _buildInitialAvatar(userName);
+          }
+
+          final userData = snapshot.data!.data() as Map<String, dynamic>?;
+          String profilePicUrl = userData?['selfieImageUrl'] as String? ?? '';
+
+          if (profilePicUrl.isEmpty) {
+            return _buildInitialAvatar(userName);
+          }
+
+          return ClipOval(
+            child: CachedNetworkImage(
+              imageUrl: profilePicUrl,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => CircularProgressIndicator(),
+              errorWidget: (context, url, error) => _buildInitialAvatar(userName),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildInitialAvatar(String userName) {
+    String initial = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.grey[200],
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+      ),
+    );
   }
 }
 

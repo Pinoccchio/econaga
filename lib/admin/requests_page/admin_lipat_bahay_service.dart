@@ -12,7 +12,7 @@ class AdminLipatBahayServiceRequest extends StatefulWidget {
 }
 
 class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRequest> {
-  bool mounted = true;
+  bool _mounted = true;
   String searchQuery = '';
   List<DocumentSnapshot> allRequests = [];
   List<DocumentSnapshot> filteredRequests = [];
@@ -30,20 +30,32 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
   }
 
   Future<void> _fetchRequests() async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('TRANSPORTATION_REQUESTS')
-        .orderBy('created_at', descending: true)
-        .get();
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('TRANSPORTATION_REQUESTS')
+          .orderBy('created_at', descending: true)
+          .get();
 
-    if (mounted) {
-      setState(() {
-        allRequests = snapshot.docs;
-        filteredRequests = allRequests.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return data['status'] == 'pending';
-        }).toList();
-        _updateStatusCounts();
-      });
+      if (_mounted) {
+        setState(() {
+          allRequests = snapshot.docs;
+          filteredRequests = allRequests.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return data['status'] == 'pending';
+          }).toList();
+          _updateStatusCounts();
+        });
+      }
+    } catch (e) {
+      print('Error fetching requests: $e');
+      if (_mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to fetch requests. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -330,7 +342,7 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
                 ),
               ),
             ),
-            _buildProfilePicture(data['user_id'] ?? ''),
+            _buildProfilePicture(data['user_id'] ?? '', firstName, lastName),
             SizedBox(width: 12),
             Expanded(
               flex: 2,
@@ -347,7 +359,7 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
                   ),
                   SizedBox(height: 4),
                   Text(
-                    'Created: ${DateFormat('MM/dd/yyyy').format(requestDate)}',
+                    'Created: ${DateFormat('MM/dd/yyyy hh:mm a').format(requestDate)}',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey[600],
@@ -458,7 +470,27 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
     );
   }
 
-  Widget _buildProfilePicture(String userId) {
+  Widget _buildProfilePicture(String userId, String firstName, String lastName) {
+    if (userId.isEmpty) {
+      return Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.grey[200],
+        ),
+        child: Center(
+          child: Text(
+            _getInitial(firstName, lastName),
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      );
+    }
+
     return Container(
       width: 40,
       height: 40,
@@ -472,7 +504,7 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
           if (!snapshot.hasData || !snapshot.data!.exists) {
             return Center(
               child: Text(
-                userId.isNotEmpty ? userId[0].toUpperCase() : 'U',
+                _getInitial(firstName, lastName),
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontWeight: FontWeight.bold,
@@ -487,7 +519,7 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
           if (profilePicUrl.isEmpty) {
             return Center(
               child: Text(
-                userId[0].toUpperCase(),
+                _getInitial(firstName, lastName),
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontWeight: FontWeight.bold,
@@ -501,7 +533,13 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
               imageUrl: profilePicUrl,
               fit: BoxFit.cover,
               placeholder: (context, url) => CircularProgressIndicator(),
-              errorWidget: (context, url, error) => Icon(Icons.person),
+              errorWidget: (context, url, error) => Text(
+                _getInitial(firstName, lastName),
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           );
         },
@@ -509,33 +547,49 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
     );
   }
 
+  String _getInitial(String firstName, String lastName) {
+    if (firstName.isNotEmpty) {
+      return firstName[0].toUpperCase();
+    } else if (lastName.isNotEmpty) {
+      return lastName[0].toUpperCase();
+    } else {
+      return '?';
+    }
+  }
+
   void updateRequestStatus(String docId, String newStatus) {
+    if (docId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: Invalid document ID'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     FirebaseFirestore.instance
         .collection('TRANSPORTATION_REQUESTS')
         .doc(docId)
         .update({'status': newStatus}).then((_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Request ${newStatus.toUpperCase()}'),
-          backgroundColor: newStatus == 'approved' ? Colors.green : Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+      if (_mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Request ${newStatus.toUpperCase()}'),
+            backgroundColor: newStatus == 'approved' ? Colors.green : Colors.red,
           ),
-        ),
-      );
-      _fetchRequests(); // This will update both the list and the counts
+        );
+        _fetchRequests();
+      }
     }).catchError((error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update status: $error'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+      if (_mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update status: $error'),
+            backgroundColor: Colors.red,
           ),
-        ),
-      );
+        );
+      }
     });
   }
 
@@ -584,8 +638,10 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
                   _buildDetailItem("Contact Number", data['contact_number'] ?? 'N/A'),
                   _buildDetailItem("Pickup Address", pickupLocation['address'] ?? 'N/A'),
                   _buildDetailItem("Destination Address", destinationLocation['address'] ?? 'N/A'),
+                  _buildDetailItem("Note", data['note'] ?? 'N/A'),
                   _buildDetailItem("Status", data['status'] ?? 'pending'),
-                  _buildDetailItem("Date", DateFormat('MM/dd/yyyy').format((data['created_at'] as Timestamp).toDate())),
+                  _buildDetailItem("User Type", data['user_type'] ?? 'N/A'),
+                  _buildDetailItem("Created Date/Time", DateFormat('MM/dd/yyyy hh:mm a').format((data['created_at'] as Timestamp).toDate())),
                   _buildDetailItem("Requested Date/Time", DateFormat('MM/dd/yyyy hh:mm a').format((data['requested_date_time'] as Timestamp).toDate())),
                   SizedBox(height: 24),
                   TextButton(
@@ -635,7 +691,7 @@ class _AdminLipatBahayServiceRequestState extends State<AdminLipatBahayServiceRe
 
   @override
   void dispose() {
-    mounted = false;
+    _mounted = false;
     super.dispose();
   }
 }

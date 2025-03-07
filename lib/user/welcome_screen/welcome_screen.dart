@@ -146,8 +146,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             return;
           }
 
-          String fullName = "${data['first_name']} ${data['last_name']}";
-          String role = data['role'];
+          String fullName = "${data['first_name']} ${data['last_name']}"; //Juan Delacruz
+          String role = data['role']; //
 
           if (role == 'client') {
             _navigateTo(ClientHomeScreenContainer(userId: user.uid));

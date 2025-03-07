@@ -296,6 +296,9 @@ class _TruckMonitoringPageState extends State<TruckMonitoringPage> {
                 ),
               ));
             }
+
+
+
             return markers;
           }).toList(),
         ),

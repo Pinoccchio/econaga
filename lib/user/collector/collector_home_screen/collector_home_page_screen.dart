@@ -1,10 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'approve_service_screen/garbage_service_request.dart';
 import 'completed_collections_viewer.dart';
@@ -22,16 +23,42 @@ class _CollectorHomePageState extends State<CollectorHomePage> {
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
   FlutterLocalNotificationsPlugin();
   late SharedPreferences prefs;
+  CalendarFormat _calendarFormat = CalendarFormat.week;
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+  Map<DateTime, List<dynamic>> _events = {};
+
+  GeoPoint? _collectorLocation;
+  final double _maxDistance = 1000.0; // Maximum distance in meters (1 km)
 
   @override
   void initState() {
     super.initState();
     _initializeNotifications();
     _initSharedPreferences();
+    _loadCollectorLocation();
   }
 
   Future<void> _initSharedPreferences() async {
     prefs = await SharedPreferences.getInstance();
+  }
+
+  Future<void> _loadCollectorLocation() async {
+    final userDoc = await FirebaseFirestore.instance
+        .collection('USERS_ACCOUNTS')
+        .doc(widget.userId)
+        .get();
+
+    if (userDoc.exists) {
+      final userData = userDoc.data() as Map<String, dynamic>;
+      final collectionZone = userData['collection_zone'] as Map<String, dynamic>?;
+      if (collectionZone != null) {
+        setState(() {
+          _collectorLocation = collectionZone['coordinates'] as GeoPoint;
+        });
+        _loadEvents();
+      }
+    }
   }
 
   Future<void> _initializeNotifications() async {
@@ -63,12 +90,10 @@ class _CollectorHomePageState extends State<CollectorHomePage> {
   }
 
   Future<void> _updateLastFetchedCount(int newCount) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setInt('lastFetchedCount', newCount);
   }
 
   void _handleApprovedRequests(int currentCount) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
     int lastFetchedCount = prefs.getInt('lastFetchedCount') ?? 0;
 
     if (currentCount > lastFetchedCount) {
@@ -85,6 +110,54 @@ class _CollectorHomePageState extends State<CollectorHomePage> {
     }
 
     _updateLastFetchedCount(currentCount);
+  }
+
+  Future<void> _loadEvents() async {
+    if (_collectorLocation == null) return;
+
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('GARBAGE_REQUESTS')
+        .where('status', isEqualTo: 'approved')
+        .get();
+
+    setState(() {
+      _events.clear();
+      for (final doc in querySnapshot.docs) {
+        final data = doc.data();
+        final location = data['location'] as Map<String, dynamic>?;
+        if (location != null && location['latitude'] != null && location['longitude'] != null) {
+          final requestLat = location['latitude'] as double;
+          final requestLng = location['longitude'] as double;
+
+          final distance = Geolocator.distanceBetween(
+            _collectorLocation!.latitude,
+            _collectorLocation!.longitude,
+            requestLat,
+            requestLng,
+          );
+
+          if (distance <= _maxDistance) {
+            final requestDate = (data['requested_date_time'] as Timestamp).toDate();
+            final event = {
+              'type': 'GARBAGE_REQUESTS',
+              'address': location['address'],
+              'name': '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}',
+              'requestData': data,
+            };
+            final dateKey = DateTime(requestDate.year, requestDate.month, requestDate.day);
+            if (_events[dateKey] == null) {
+              _events[dateKey] = [event];
+            } else {
+              _events[dateKey]!.add(event);
+            }
+          }
+        }
+      }
+    });
+  }
+
+  List<dynamic> _getEventsForDay(DateTime day) {
+    return _events[DateTime(day.year, day.month, day.day)] ?? [];
   }
 
   @override
@@ -108,6 +181,8 @@ class _CollectorHomePageState extends State<CollectorHomePage> {
                   _buildHeader(),
                   SizedBox(height: 24),
                   _buildMainBanner(),
+                  SizedBox(height: 24),
+                  _buildCalendar(),
                   SizedBox(height: 24),
                   _buildStatisticsRow(context),
                   SizedBox(height: 24),
@@ -272,6 +347,75 @@ class _CollectorHomePageState extends State<CollectorHomePage> {
     );
   }
 
+  Widget _buildCalendar() {
+    final today = DateTime.now();
+    final firstDay = DateTime(today.year, today.month, today.day);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: TableCalendar(
+        firstDay: firstDay,
+        lastDay: DateTime.utc(2030, 12, 31),
+        focusedDay: _focusedDay,
+        calendarFormat: _calendarFormat,
+        selectedDayPredicate: (day) {
+          return isSameDay(_selectedDay, day);
+        },
+        onDaySelected: (selectedDay, focusedDay) {
+          if (!selectedDay.isBefore(firstDay)) {
+            setState(() {
+              _selectedDay = selectedDay;
+              _focusedDay = focusedDay;
+            });
+          }
+        },
+        onFormatChanged: (format) {
+          if (_calendarFormat != format) {
+            setState(() {
+              _calendarFormat = format;
+            });
+          }
+        },
+        onPageChanged: (focusedDay) {
+          _focusedDay = focusedDay;
+        },
+        eventLoader: _getEventsForDay,
+        calendarStyle: CalendarStyle(
+          todayDecoration: BoxDecoration(
+            color: Colors.green.withOpacity(0.5),
+            shape: BoxShape.circle,
+          ),
+          selectedDecoration: BoxDecoration(
+            color: Colors.green,
+            shape: BoxShape.circle,
+          ),
+          markerDecoration: BoxDecoration(
+            color: Colors.deepOrange,
+            shape: BoxShape.circle,
+          ),
+          disabledTextStyle: TextStyle(color: Colors.grey.shade400),
+        ),
+        enabledDayPredicate: (day) => !day.isBefore(firstDay),
+      ),
+    );
+  }
+
+  IconData _getIconForEventType(String type) {
+    switch (type) {
+      case 'GARBAGE_REQUESTS':
+        return Icons.delete;
+      case 'TRANSPORTATION_REQUESTS':
+        return Icons.local_shipping;
+      case 'BURIAL_REQUESTS':
+        return Icons.church;
+      default:
+        return Icons.event;
+    }
+  }
+
   Widget _buildStatisticsRow(BuildContext context) {
     return Row(
       children: [
@@ -350,7 +494,7 @@ class _CollectorHomePageState extends State<CollectorHomePage> {
                 requestLng,
               );
 
-              return distance <= 2000;
+              return distance <= _maxDistance;
             }).length ?? 0;
 
             if (status == 'approved') {

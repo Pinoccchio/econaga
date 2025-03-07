@@ -14,7 +14,6 @@ class GarbageServiceRequest extends StatefulWidget {
 }
 
 class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
-  String _filterOption = 'Within Zone';
   GeoPoint? _collectionZone;
   Position? _currentLocation;
 
@@ -64,7 +63,7 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
         border: Border.all(color: Colors.green[300]!),
       ),
       child: Text(
-        _filterOption,
+        'Requests within 1 km',
         style: GoogleFonts.poppins(color: Colors.green[700], fontSize: 14),
       ),
     );
@@ -130,7 +129,7 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
                 final filteredRequests = _filterRequests(requests);
 
                 if (filteredRequests.isEmpty) {
-                  return Center(child: Text('No requests found within the zone.'));
+                  return Center(child: Text('No nearby approved requests found.'));
                 }
 
                 return ListView.builder(
@@ -149,7 +148,6 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
       ),
     );
   }
-
 
   List<QueryDocumentSnapshot> _filterRequests(List<QueryDocumentSnapshot> requests) {
     return requests.where((request) {
@@ -174,7 +172,7 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
         requestLng,
       );
 
-      return distance <= 2000; // Within 1 km
+      return distance <= 1000; // Within 1 km
     }).toList();
   }
 
@@ -318,10 +316,6 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
                       TextSpan(text: '${data['contact_number']}\n'),
                       TextSpan(text: 'Location: ', style: TextStyle(fontWeight: FontWeight.bold)),
                       TextSpan(text: '${data['location']['address']}\n'),
-                      TextSpan(text: 'Latitude: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                      TextSpan(text: '${data['location']['latitude']}\n'),
-                      TextSpan(text: 'Longitude: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                      TextSpan(text: '${data['location']['longitude']}\n'),
                       TextSpan(text: 'Note: ', style: TextStyle(fontWeight: FontWeight.bold)),
                       TextSpan(text: '${data['note'] ?? 'No additional notes'}'),
                     ],
@@ -349,3 +343,4 @@ class _GarbageServiceRequestState extends State<GarbageServiceRequest> {
     );
   }
 }
+

@@ -117,19 +117,6 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                             style: TextStyle(color: Colors.green),
                           ),
                         ),
-                        // Registration Link
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => AdminRegisterPage()),
-                            );
-                          },
-                          child: Text(
-                            "Doesn't have any account? Register here",
-                            style: TextStyle(color: Colors.green),
-                          ),
-                        ),
                         SizedBox(height: 20),
                         Text(
                           'Terms of use. Privacy policy',
@@ -309,3 +296,4 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
     );
   }
 }
+

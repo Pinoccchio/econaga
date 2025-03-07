@@ -101,7 +101,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             stream: FirebaseFirestore.instance.collection('ADMIN_ACCOUNTS').doc(widget.userId).snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return CircularProgressIndicator();
+
               }
               if (snapshot.hasError) {
                 return Text('Error: ${snapshot.error}', style: TextStyle(color: Colors.red));
@@ -112,7 +112,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               var userData = snapshot.data!.data() as Map<String, dynamic>;
               String email = userData['email'] ?? '';
               String fullName = userData['full_name'] ?? '';
-              String profilePictureUrl = userData['profile_picture_url'];
+              String? profilePictureUrl = userData['profile_picture_url'] as String?;
               String firstLetter = email.isNotEmpty ? email[0].toUpperCase() : 'U';
 
               return Row(
@@ -146,9 +146,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
                             strokeWidth: 2,
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
-                          errorWidget: (context, url, error) => _buildProfileInitial(firstLetter),
+                          errorWidget: (context, url, error) => _buildDefaultProfileImage(),
                         )
-                            : _buildProfileInitial(firstLetter),
+                            : _buildDefaultProfileImage(),
                       ),
                     ),
                   ),
@@ -218,16 +218,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
     );
   }
 
-  Widget _buildProfileInitial(String initial) {
-    return Center(
-      child: Text(
-        initial,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+  Widget _buildDefaultProfileImage() {
+    return Image.asset(
+      'lib/components/assets/images/official_logo.png',
+      width: 40,
+      height: 40,
+      fit: BoxFit.cover,
     );
   }
 
